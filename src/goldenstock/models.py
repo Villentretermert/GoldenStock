@@ -239,3 +239,23 @@ class TemplateVersion(Base):
     clean_key: Mapped[str]=mapped_column(String(200))
     contract: Mapped[str]=mapped_column(Text)
     created: Mapped[float]=mapped_column(Float,default=time.time)
+
+
+class CalculationRun(Base):
+    __tablename__='calculation_runs'
+    __table_args__=(UniqueConstraint('owner_id','idem_key'),)
+    id: Mapped[str]=mapped_column(String(32),primary_key=True,default=new_id)
+    org_id: Mapped[str]=mapped_column(ForeignKey('organizations.id'),index=True)
+    owner_id: Mapped[str]=mapped_column(ForeignKey('users.id'))
+    company_id: Mapped[str]=mapped_column(ForeignKey('companies.id'))
+    version_id: Mapped[str]=mapped_column(ForeignKey('template_versions.id'))
+    title: Mapped[str]=mapped_column(String(160))
+    engine: Mapped[str]=mapped_column(String(32))
+    idem_key: Mapped[str]=mapped_column(String(100))
+    request_hash: Mapped[str]=mapped_column(String(64))
+    input_hash: Mapped[str]=mapped_column(String(64))
+    result_hash: Mapped[str]=mapped_column(String(64))
+    input: Mapped[str]=mapped_column(Text)
+    output: Mapped[str]=mapped_column(Text)
+    state: Mapped[str]=mapped_column(String(40))
+    created: Mapped[float]=mapped_column(Float,default=time.time)

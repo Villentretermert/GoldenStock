@@ -26,7 +26,7 @@ button:disabled{opacity:.5;cursor:wait}input,select{max-width:100%;width:100%;pa
 label{display:block;margin:10px 0 16px}label input,label select{display:block;margin-top:5px}form{margin:0}form.inline{display:inline-block}
 .login{max-width:460px;margin:60px auto}.login h1{font-size:34px}.notice{border-left:3px solid #b58a39;padding:12px 18px;background:#f8f1df;margin:18px 0}
 #message{color:#9b2929;white-space:pre-wrap}.table-wrap{overflow-x:auto}td,th{padding:12px;text-align:left;vertical-align:top;border-bottom:1px solid #d8e0d6}td{max-width:600px;overflow-wrap:anywhere}
-.template-map{min-width:760px}
+.template-map{min-width:760px} input.check{width:auto;display:inline}fieldset{border:1px solid #d8e0d6;border-radius:8px;margin:16px 0;padding:16px;min-width:0}
 @media(max-width:600px){h1{font-size:30px}header{padding:16px 22px;gap:12px}main{padding:22px 16px}.card{padding:18px}nav{gap:12px;font-size:14px}}
 '''
 JS = '''
@@ -34,12 +34,22 @@ document.querySelectorAll('form[data-api]').forEach(form=>form.addEventListener(
 event.preventDefault();const message=document.getElementById('message');message.textContent='';
 const button=form.querySelector('button');if(button)button.disabled=true;
 try{const fields=new FormData(form);let body;const headers={'X-CSRF-Token':document.querySelector('meta[name="csrf"]').content};
-if(form.dataset.upload){body=fields;form.dataset.requestKey ||= crypto.randomUUID();headers['Idempotency-Key']=form.dataset.requestKey;}
+if(form.dataset.calculation){
+const values=Object.fromEntries(fields);const scenarios={};
+for(const name of ['base','optimistic','stress']){if(name!=='base'&&!fields.has('enable.'+name))continue;
+scenarios[name]=Object.create(null);for(const [key,value] of fields){const parts=key.split('.');if(parts[0]!==name||parts.length!==3)continue;
+const entry=scenarios[name][parts[1]]||={confirmed:fields.has('confirmed')};
+if(parts[2]==='note'||value.trim())entry[parts[2]]=value.trim();}}
+const checks=[];for(let n=0;n<3;n++){const prefix='check.'+n+'.';if(values[prefix+'key'])checks.push({key:values[prefix+'key'],expected:values[prefix+'expected'],tolerance:values[prefix+'tolerance'],note:values[prefix+'note']});}
+body=JSON.stringify({title:values.title,company_id:values.company_id,template_id:values.template_id,version_id:values.version_id,snapshot_id:values.snapshot_id||null,scenarios,checks});
+if(form.dataset.payload!==body){form.dataset.requestKey=crypto.randomUUID();form.dataset.payload=body;}
+headers['Idempotency-Key']=form.dataset.requestKey;headers['Content-Type']='application/json';}
+else if(form.dataset.upload){body=fields;form.dataset.requestKey ||= crypto.randomUUID();headers['Idempotency-Key']=form.dataset.requestKey;}
 else{let values=Object.fromEntries(fields);for(const k of ['shared','active'])if(k in values)values[k]=values[k]==='true';
 if('revision' in values)values.revision=Number(values.revision);body=JSON.stringify(values);headers['Content-Type']='application/json';}
 const response=await fetch(form.dataset.api,{method:form.dataset.method||'POST',headers,body});const result=await response.json();
 if(!response.ok)throw new Error(typeof result.detail==='string'?result.detail:'Please check the entered values');
-location.href=form.dataset.next||location.pathname+location.search;
+location.href=form.dataset.calculation?'/calculations/'+result.id:(form.dataset.next||location.pathname+location.search);
 }catch(error){message.textContent=error.message;message.scrollIntoView({block:'center'});}finally{if(button)button.disabled=false;}
 }));
 '''
@@ -55,7 +65,7 @@ def hidden(name, value):
 
 def page(title, body, actor=None):
     nonce = secrets.token_urlsafe(20)
-    nav = '' if not actor else '<nav><a href="/">Watchlist</a><a href="/catalog">Companies</a><a href="/sources">Sources</a><a href="/models">Models</a><a href="/templates">Templates</a><a href="/files">Files & jobs</a>'+('<a href="/team">Team</a>' if actor.account_admin else '')+'</nav><span class="muted">'+e(actor.login)+'</span>'+form('/api/v1/auth/logout','Sign out',next='/login')
+    nav = '' if not actor else '<nav><a href="/">Watchlist</a><a href="/catalog">Companies</a><a href="/sources">Sources</a><a href="/models">Models</a><a href="/templates">Templates</a><a href="/calculations">Calculations</a><a href="/files">Files & jobs</a>'+('<a href="/team">Team</a>' if actor.account_admin else '')+'</nav><span class="muted">'+e(actor.login)+'</span>'+form('/api/v1/auth/logout','Sign out',next='/login')
     html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="csrf" content="{e(actor.csrf if actor else '')}"><title>{e(title)} · GoldenStock</title><style>{CSS}</style></head>
     <body><header><a class="brand" href="/">GoldenStock</a>{nav}</header><main><div id="message" role="alert"></div>{body}</main><script nonce="{nonce}">{JS}</script></body></html>'''
@@ -78,6 +88,8 @@ def company_card(c):
 
 
 def mount_ui(app):
+    from goldenstock.calculations_ui import mount_calculations_ui
+    mount_calculations_ui(app)
     from goldenstock.templates_ui import mount_templates_ui
     mount_templates_ui(app)
     from goldenstock.ai_ui import mount_ai_ui

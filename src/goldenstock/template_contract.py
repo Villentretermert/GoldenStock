@@ -1,5 +1,4 @@
 """Strict XLSX v1 contract. Parsing never evaluates workbook formulas."""
-import ast
 import io
 import json
 import math
@@ -21,31 +20,9 @@ def invalid(message):
 
 
 def formula_dependencies(formula):
-    if not isinstance(formula,str) or not formula.startswith('=') or len(formula)>500:
-        invalid('Invalid or oversized formula')
-    body=formula[1:].replace("'Model'!",'').replace('Model!','')
-    if '**' in body or '//' in body: invalid('Use Excel arithmetic syntax, including ^ for powers')
-    if not re.fullmatch(r'[A-Z0-9$+\-*/^().\s]+',body):
-        invalid('Functions, names and external references are not supported')
-    refs=[]
-    def reference(match):
-        cell=match[1]+match[2]
-        if cell not in refs: refs.append(cell)
-        return 'v'+str(refs.index(cell))
-    expression=CELL.sub(reference,body).replace('^','**')
-    try: tree=ast.parse(expression.strip(),mode='eval')
-    except (SyntaxError,RecursionError): invalid('Unsupported formula syntax')
-    nodes=list(ast.walk(tree))
-    if len(nodes)>100: invalid('Formula is too complex')
-    allowed=(ast.Expression,ast.BinOp,ast.UnaryOp,ast.Add,ast.Sub,ast.Mult,ast.Div,
-             ast.Pow,ast.UAdd,ast.USub,ast.Constant,ast.Name,ast.Load)
-    for node in nodes:
-        if not isinstance(node,allowed): invalid('Only arithmetic and mapped cell references are supported')
-        if isinstance(node,ast.Name) and node.id not in {'v'+str(i) for i in range(len(refs))}:
-            invalid('Functions, names and external references are not supported')
-        if isinstance(node,ast.Constant) and (type(node.value) not in (int,float) or node.value not in (0,1)):
-            invalid('Move numeric assumptions into mapped input cells; only 0 and 1 are formula constants')
-    return refs
+    from goldenstock.calculation_engine import parse_formula
+    try: return parse_formula(formula)[1]
+    except ValueError as exc: invalid(str(exc))
 
 
 def validate_template(content):

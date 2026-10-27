@@ -152,6 +152,54 @@ def main():
                         assert copying.result().status_code==201
                         assert newer.result().json()['number']==4
                 finally: template_api.access=original_access
+                # Concurrent calculation retries have one immutable receipt.
+                version=templates[0].json()
+                calculation=dict(title='Synthetic PostgreSQL calculation',company_id='sber',
+                    template_id=template_id,version_id=version['id'],snapshot_id=saved[0].json()['id'],
+                    scenarios={'base':{
+                        'profit_owners':dict(fact_id=current,note='Synthetic source definition and perimeter checked',confirmed=True),
+                        'growth':dict(value='0.05',note='Synthetic growth assumption',confirmed=True)}},checks=[])
+                def calculate_once(key):
+                    return client.post('/api/v1/calculations',json=calculation,headers={'Idempotency-Key':key})
+                with ThreadPoolExecutor(max_workers=3) as pool:
+                    runs=list(pool.map(lambda _:calculate_once('pg-calculation-first'),range(3)))
+                assert all(r.status_code==201 for r in runs),[r.text for r in runs]
+                assert len({r.json()['id'] for r in runs})==1
+                run_id=runs[0].json()['id']
+                assert client.post('/api/v1/calculations/'+run_id+'/replay').json()['matched']
+                # A review cannot change a fact while the calculation takes its snapshot.
+                import goldenstock.calculations as calculation_api
+                original_state=calculation_api.review_state
+                calculation_locked=threading.Event();finish_calculation=threading.Event()
+                def gated_state(*args,**kwargs):
+                    result=original_state(*args,**kwargs)
+                    calculation_locked.set();assert finish_calculation.wait(10)
+                    return result
+                calculation_api.review_state=gated_state
+                try:
+                    with ThreadPoolExecutor(max_workers=2) as pool:
+                        creating=pool.submit(calculate_once,'pg-calculation-review-race')
+                        assert calculation_locked.wait(10)
+                        revising=pool.submit(client.post,'/api/v1/facts/'+current+'/reviews',json={
+                            'expected_revision':1,'decision':'unreviewed','note':'Synthetic concurrent review change'})
+                        time.sleep(.2)
+                        assert not revising.done(),'Review overtook a locked calculation snapshot'
+                        finish_calculation.set()
+                        assert creating.result().status_code==201
+                        assert revising.result().status_code==201
+                finally: calculation_api.review_state=original_state
+                assert calculate_once('pg-calculation-stale').status_code==409
+                assert client.get('/api/v1/calculations/'+run_id).json()['inputs_current'] is False
+                # Sharing changes use the same lock order as calculations and uploads.
+                calculation.pop('snapshot_id')
+                calculation['scenarios']['base']['profit_owners']=dict(value='100',note='Synthetic manual input',confirmed=True)
+                revision=client.get('/api/v1/templates/'+template_id).json()['revision']
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    calculating=pool.submit(calculate_once,'pg-calculation-visibility-race')
+                    sharing=pool.submit(client.patch,'/api/v1/templates/'+template_id+'/visibility',json={'shared':True,'revision':revision})
+                    assert calculating.result().status_code==201
+                    assert sharing.result().status_code==200
+                print('Calculation PostgreSQL PASS: idempotency, replay, review fencing and stale input rejection.')
                 print('Template PostgreSQL PASS: idempotent upload and unique concurrent version numbers.')
                 print('PostgreSQL integration PASS: migrations, concurrent upload/fact/review/snapshot/AI deduplication, single GPU task, single successor, crash recovery and stale-worker fencing.')
     finally:

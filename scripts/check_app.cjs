@@ -207,6 +207,35 @@ let browser;
    await page.setViewportSize({width:1440,height:1000});
    const original=await page.request.get(base+await page.getByRole('link',{name:'Download private original',exact:true}).getAttribute('href'));
    if(!(await original.body()).equals(demo))throw Error('Template original changed');
+   if(process.env.GS_QA_CALCULATIONS==='1'){
+     await page.getByRole('link',{name:'Calculate this version',exact:true}).click();
+     await page.getByLabel('Calculation title',{exact:true}).fill('Synthetic calculation - not issuer data');
+     for(const [name,growth] of [['base','0.05'],['optimistic','0.1'],['stress','0']]){
+       if(name!=='base')await page.locator('[name="enable.'+name+'"]').check();
+       await page.locator('[name="'+name+'.profit_owners.value"]').fill('100');
+       await page.locator('[name="'+name+'.profit_owners.note"]').fill('Synthetic known-answer fixture');
+       await page.locator('[name="'+name+'.growth.value"]').fill(growth);
+       await page.locator('[name="'+name+'.growth.note"]').fill('Synthetic scenario assumption');
+     }
+     await page.locator('[name="confirmed"]').check();
+     await page.screenshot({path:'design/previews/calculation-inputs.png',fullPage:true});
+     await page.getByRole('button',{name:'Calculate and save private scenarios',exact:true}).click();
+     await page.getByRole('heading',{name:'Synthetic calculation - not issuer data',exact:true}).waitFor();
+     await page.getByRole('cell',{name:'127.63',exact:true}).waitFor();
+     await page.getByRole('cell',{name:'161.05',exact:true}).waitFor();
+     const savedUrl=page.url();
+     await page.getByRole('button',{name:'Verify reproducibility',exact:true}).click();
+     await page.getByRole('status').filter({hasText:'Replay matched'}).waitFor();
+     await page.screenshot({path:'design/previews/calculation-desktop.png',fullPage:true});
+     await page.setViewportSize({width:390,height:900});
+     await page.screenshot({path:'design/previews/calculation-mobile.png',fullPage:true});
+     if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Calculation page overflow');
+     const runId=new URL(savedUrl).pathname.split('/').pop();
+     const receipt=await(await page.request.get(base+'/api/v1/calculations/'+runId)).json();
+     if(receipt.result.state!=='calculated_without_checks'||Object.keys(receipt.result.scenarios).length!==3)throw Error('Incorrect scenario receipt');
+     await page.setViewportSize({width:1440,height:1000});
+     await page.goto(base+'/templates/'+receipt.input.template.id);
+   }
    await page.getByRole('button',{name:'Create private structure copy',exact:true}).click();
    await page.getByRole('link',{name:'Copy of Synthetic five-year template',exact:true}).waitFor();
  }
@@ -217,5 +246,5 @@ let browser;
  if((await page.request.get(base+'/api/v1/documents')).status()!==401)throw Error('Logout did not revoke access');
  const ready=await page.request.get(base+'/health/ready');
  if(ready.status()!==200||errors.length||external.length||overflow)throw Error(JSON.stringify({ready:ready.status(),errors,external,overflow}));
- console.log(JSON.stringify({ready:200,scenarios:['login','watchlist','public sources','shared draft','private upload','worker success','download','extraction','normalization','conflicts','review','input snapshot','stale snapshot','team','logout',...(process.env.GS_QA_AI==='1'?['local AI proposal','source-backed summary','AI mobile']:[]),...(process.env.GS_QA_PUBLIC==='1'?['SEC JPMorgan summary','SEC HSBC summary','SEC Nu summary']:[]),...(process.env.GS_QA_TEMPLATES==='1'?['template upload','template sharing','template copy','template mobile']:[])],jsErrors:errors,externalRequests:external,mobileOverflow:overflow}));
+ console.log(JSON.stringify({ready:200,scenarios:['login','watchlist','public sources','shared draft','private upload','worker success','download','extraction','normalization','conflicts','review','input snapshot','stale snapshot','team','logout',...(process.env.GS_QA_AI==='1'?['local AI proposal','source-backed summary','AI mobile']:[]),...(process.env.GS_QA_PUBLIC==='1'?['SEC JPMorgan summary','SEC HSBC summary','SEC Nu summary']:[]),...(process.env.GS_QA_CALCULATIONS==='1'?['three calculation scenarios','replay verification','calculation mobile']:[]),...(process.env.GS_QA_TEMPLATES==='1'?['template upload','template sharing','template copy','template mobile']:[])],jsErrors:errors,externalRequests:external,mobileOverflow:overflow}));
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(async()=>{await browser?.close();});

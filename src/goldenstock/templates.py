@@ -131,6 +131,8 @@ class Visibility(BaseModel):
 def visibility(template_id:str,data:Visibility,request:Request):
     actor=authenticate(request,True)
     with Session(request.app.state.engine) as db,db.begin():
+        # Audit inserts reference User too; keep the same order as upload/copy/calculation.
+        db.scalar(select(User).where(User.id==actor.id).with_for_update())
         owned(db,ModelTemplate,template_id,actor,True)
         changed=db.execute(update(ModelTemplate).where(ModelTemplate.id==template_id,ModelTemplate.revision==data.revision)
             .values(shared=data.shared,revision=data.revision+1))

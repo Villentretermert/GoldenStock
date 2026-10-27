@@ -14,7 +14,7 @@ def mount_templates_ui(app):
     def library(request:Request):
         actor=actor_or_none(request)
         if not actor: return RedirectResponse('/login',status_code=303)
-        body='<h1>Excel templates</h1><p>Versioned structures for future calculations. Uploads are private by default.</p><p><a href="/api/v1/templates/demo">Download synthetic demo XLSX</a></p><div class="notice">Contract v1: Model and GS_Map sheets, up to 100 mapped cells. Arithmetic only; no Excel functions, macros, external links or circular references. Upload limit 50 MB, expanded package limit 5 MB. Validation does not calculate a valuation.</div>'
+        body='<h1>Excel templates</h1><p>Versioned structures for private scenario calculations. Uploads are private by default.</p><p><a href="/api/v1/templates/demo">Download synthetic demo XLSX</a></p><div class="notice">Contract v1: Model and GS_Map sheets, up to 100 mapped cells. Arithmetic only; no Excel functions, macros, external links or circular references. Upload limit 50 MB, expanded package limit 5 MB. Validation does not calculate a valuation.</div>'
         body+=form('/api/v1/templates','Validate and save template',upload_fields(),upload=True)
         for row in listing(request):
             body+=f'<article class="card"><a href="/templates/{e(row["id"])}">{e(row["title"])}</a><p>{"Shared structure" if row["shared"] else "Private"}</p></article>'
@@ -35,6 +35,7 @@ def mount_templates_ui(app):
             link=f'/api/v1/templates/{template_id}/versions/{v["id"]}'
             body+=f'<article class="card"><h2>Version {v["number"]}</h2><p>Compatible with {e(v["contract"]["policy"])}. Not calculated.</p><a href="{link}/structure">Download clean structure</a>'
             if owner: body+=f' · <a href="{link}/original">Download private original</a>'
+            body+=f'<p><a class="button" href="/calculations/new?template_id={e(template_id)}&version_id={e(v["id"])}">Calculate this version</a></p>'
             body+='<div class="table-wrap"><table class="template-map"><tr><th>Key</th><th>Role</th><th>Cell</th><th>Unit / period</th><th>Definition</th></tr>'
             for f in v['contract']['fields']:
                 body+=f'<tr><td>{e(f["key"])}</td><td>{e(f["role"])}</td><td>{e(f["cell"])}</td><td>{e(f["unit"])} / {e(f["period"])}</td><td>{e(f["definition"])}</td></tr>'

@@ -190,6 +190,26 @@ let browser;
  }
  await reviewFact(facts.find(f=>f.scale==='millions'),'unreviewed');
  await page.getByText('Stale — review changes',{exact:false}).waitFor();
+ if(process.env.GS_QA_TEMPLATES==='1'){
+   await page.goto(base+'/templates');
+   const demo=await(await page.request.get(base+'/api/v1/templates/demo')).body();
+   await page.getByLabel('Template title',{exact:true}).fill('Synthetic five-year template');
+   await page.getByLabel('XLSX template',{exact:true}).setInputFiles({name:'demo.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:demo});
+   await page.getByRole('button',{name:'Validate and save template',exact:true}).click();
+   await page.getByRole('link',{name:'Synthetic five-year template',exact:true}).click();
+   await page.getByRole('heading',{name:'Version 1',exact:true}).waitFor();
+   await page.getByRole('button',{name:'Share clean structure with fund',exact:true}).click();
+   await page.getByRole('button',{name:'Make private',exact:true}).waitFor();
+   await page.screenshot({path:'design/previews/template-desktop.png',fullPage:true});
+   await page.setViewportSize({width:390,height:900});
+   await page.screenshot({path:'design/previews/template-mobile.png',fullPage:true});
+   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Template page overflow');
+   await page.setViewportSize({width:1440,height:1000});
+   const original=await page.request.get(base+await page.getByRole('link',{name:'Download private original',exact:true}).getAttribute('href'));
+   if(!(await original.body()).equals(demo))throw Error('Template original changed');
+   await page.getByRole('button',{name:'Create private structure copy',exact:true}).click();
+   await page.getByRole('link',{name:'Copy of Synthetic five-year template',exact:true}).waitFor();
+ }
  await page.getByRole('link',{name:'Team',exact:true}).click();
  await page.getByRole('heading',{name:'Team accounts'}).waitFor();
  await page.getByRole('button',{name:'Sign out',exact:true}).click();
@@ -197,5 +217,5 @@ let browser;
  if((await page.request.get(base+'/api/v1/documents')).status()!==401)throw Error('Logout did not revoke access');
  const ready=await page.request.get(base+'/health/ready');
  if(ready.status()!==200||errors.length||external.length||overflow)throw Error(JSON.stringify({ready:ready.status(),errors,external,overflow}));
- console.log(JSON.stringify({ready:200,scenarios:['login','watchlist','public sources','shared draft','private upload','worker success','download','extraction','normalization','conflicts','review','input snapshot','stale snapshot','team','logout',...(process.env.GS_QA_AI==='1'?['local AI proposal','source-backed summary','AI mobile']:[]),...(process.env.GS_QA_PUBLIC==='1'?['SEC JPMorgan summary','SEC HSBC summary','SEC Nu summary']:[])],jsErrors:errors,externalRequests:external,mobileOverflow:overflow}));
+ console.log(JSON.stringify({ready:200,scenarios:['login','watchlist','public sources','shared draft','private upload','worker success','download','extraction','normalization','conflicts','review','input snapshot','stale snapshot','team','logout',...(process.env.GS_QA_AI==='1'?['local AI proposal','source-backed summary','AI mobile']:[]),...(process.env.GS_QA_PUBLIC==='1'?['SEC JPMorgan summary','SEC HSBC summary','SEC Nu summary']:[]),...(process.env.GS_QA_TEMPLATES==='1'?['template upload','template sharing','template copy','template mobile']:[])],jsErrors:errors,externalRequests:external,mobileOverflow:overflow}));
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(async()=>{await browser?.close();});

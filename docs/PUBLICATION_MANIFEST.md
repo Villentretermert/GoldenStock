@@ -162,3 +162,6 @@
 - tests/test_reviews.py
 - tests/test_rounding.py
 - tests/test_workspace.py
+
+## GS-017: последующее изменение
+После первой публикации добавляются исходники и тесты шаблонов, миграция 0011, инструкция TEMPLATES.md и синтетический assets/demo-template.xlsx. Секреты и пользовательские файлы по-прежнему исключены.

@@ -212,3 +212,30 @@ class PublicSnapshot(Base):
     payload: Mapped[str]=mapped_column(Text)
     created: Mapped[float]=mapped_column(Float,default=time.time)
     checked: Mapped[float]=mapped_column(Float,default=time.time)
+
+
+class ModelTemplate(Base):
+    __tablename__='model_templates'
+    id: Mapped[str]=mapped_column(String(32),primary_key=True,default=new_id)
+    org_id: Mapped[str]=mapped_column(ForeignKey('organizations.id'),index=True)
+    owner_id: Mapped[str]=mapped_column(ForeignKey('users.id'))
+    title: Mapped[str]=mapped_column(String(160))
+    shared: Mapped[bool]=mapped_column(Boolean,default=False)
+    revision: Mapped[int]=mapped_column(Integer,default=1)
+
+
+class TemplateVersion(Base):
+    __tablename__='template_versions'
+    __table_args__=(UniqueConstraint('template_id','number'),UniqueConstraint('owner_id','idem_key'))
+    id: Mapped[str]=mapped_column(String(32),primary_key=True,default=new_id)
+    template_id: Mapped[str]=mapped_column(ForeignKey('model_templates.id'),index=True)
+    owner_id: Mapped[str]=mapped_column(String(32))
+    number: Mapped[int]=mapped_column(Integer)
+    idem_key: Mapped[str]=mapped_column(String(100))
+    request_hash: Mapped[str]=mapped_column(String(64))
+    sha256: Mapped[str]=mapped_column(String(64))
+    clean_sha256: Mapped[str]=mapped_column(String(64))
+    blob_key: Mapped[str]=mapped_column(String(200))
+    clean_key: Mapped[str]=mapped_column(String(200))
+    contract: Mapped[str]=mapped_column(Text)
+    created: Mapped[float]=mapped_column(Float,default=time.time)

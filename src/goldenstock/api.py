@@ -16,6 +16,7 @@ from goldenstock.reviews import router as reviews_router
 from goldenstock.ai_runs import router as ai_router
 from goldenstock.knowledge import router as knowledge_router
 from goldenstock.public_sources import router as public_router
+from goldenstock.templates import router as templates_router
 from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 from goldenstock.auth import hash_password
 import secrets
@@ -45,6 +46,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ai_router)
     app.include_router(knowledge_router)
     app.include_router(public_router)
+    app.include_router(templates_router)
     app.add_middleware(RequestBodyLimitMiddleware,max_body_size=settings.max_file_bytes+65536)
 
     @app.middleware('http')

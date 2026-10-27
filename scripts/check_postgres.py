@@ -118,6 +118,41 @@ def main():
                     assert process_ai(app.state.engine,settings,Provider()) is False
                     release.set();assert first.result()
                 assert len(calls)==1
+                demo=client.get('/api/v1/templates/demo').content
+                def template_upload(key,template_id=''):
+                    return client.post('/api/v1/templates',headers={'Idempotency-Key':key},
+                        data={'title':'Synthetic concurrency template','template_id':template_id},
+                        files={'file':('template.xlsx',demo)})
+                with ThreadPoolExecutor(max_workers=3) as pool:
+                    templates=list(pool.map(lambda _:template_upload('pg-template-first'),range(3)))
+                assert all(t.status_code==201 for t in templates)
+                assert len({t.json()['id'] for t in templates})==1
+                template_id=templates[0].json()['template_id']
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    versions=list(pool.map(lambda k:template_upload(k,template_id),['pg-template-v2','pg-template-v3']))
+                assert sorted(t.json()['number'] for t in versions)==[2,3]
+                # A copy holds the visibility/version lock until it picks its source.
+                import goldenstock.templates as template_api
+                original_access=template_api.access
+                copy_locked=threading.Event();finish_copy=threading.Event()
+                def gated_access(*args,**kwargs):
+                    result=original_access(*args,**kwargs)
+                    if not (kwargs.get('write') or (len(args)>3 and args[3])):
+                        copy_locked.set();assert finish_copy.wait(10)
+                    return result
+                template_api.access=gated_access
+                try:
+                    with ThreadPoolExecutor(max_workers=2) as pool:
+                        copying=pool.submit(client.post,'/api/v1/templates/'+template_id+'/copy')
+                        assert copy_locked.wait(10)
+                        newer=pool.submit(template_upload,'pg-template-v4',template_id)
+                        time.sleep(.2)
+                        assert not newer.done(),'New version overtook a locked source selection'
+                        finish_copy.set()
+                        assert copying.result().status_code==201
+                        assert newer.result().json()['number']==4
+                finally: template_api.access=original_access
+                print('Template PostgreSQL PASS: idempotent upload and unique concurrent version numbers.')
                 print('PostgreSQL integration PASS: migrations, concurrent upload/fact/review/snapshot/AI deduplication, single GPU task, single successor, crash recovery and stale-worker fencing.')
     finally:
         if app:

@@ -1,0 +1,105 @@
+<div id="goldenstock-preview" aria-label="GoldenStock interactive design">
+<style>
+#goldenstock-preview{--gs-bg:light-dark(#f5f5ef,#111b17);--gs-panel:light-dark(#fff,#19251f);--gs-ink:light-dark(#182d24,#eef4ee);--gs-muted:light-dark(#5d6b62,#aabbb0);--gs-line:light-dark(#dce1d8,#35463b);--gs-brand:light-dark(#214d3a,#b5dec5);--gs-onbrand:light-dark(#fff,#102219);--gs-gold:light-dark(#f5e5bc,#58492a);color:var(--gs-ink);font:15px/1.5 system-ui,sans-serif;background:var(--gs-bg);border:1px solid var(--gs-line);border-radius:14px;overflow:hidden}
+#goldenstock-preview *{box-sizing:border-box}
+#goldenstock-preview button,#goldenstock-preview input,#goldenstock-preview select{font:inherit}
+#goldenstock-preview button{border:1px solid var(--gs-line);border-radius:6px;padding:9px 14px;color:var(--gs-ink);background:var(--gs-panel)}
+#goldenstock-preview button:focus-visible,#goldenstock-preview input:focus-visible{outline:3px solid var(--gs-brand);outline-offset:2px}
+#goldenstock-preview button.primary,#goldenstock-preview button[aria-pressed=true]{background:var(--gs-brand);color:var(--gs-onbrand);border-color:var(--gs-brand)}
+#goldenstock-preview button:disabled{opacity:.45;cursor:not-allowed}
+#goldenstock-preview header{display:flex;justify-content:space-between;align-items:center;gap:15px;padding:20px 26px;background:var(--gs-panel);border-bottom:1px solid var(--gs-line)}
+#goldenstock-preview .logo{font-family:Georgia,serif;font-size:27px;letter-spacing:-1px}
+#goldenstock-preview .label{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gs-muted)}
+#goldenstock-preview .shell{display:grid;grid-template-columns:170px minmax(0,1fr)}
+#goldenstock-preview nav{padding:26px 14px;border-right:1px solid var(--gs-line);display:flex;flex-direction:column;gap:8px}
+#goldenstock-preview nav button{text-align:left;border-color:transparent;background:transparent}
+#goldenstock-preview main{padding:28px;min-height:590px;min-width:0}
+#goldenstock-preview h1{font:32px/1.15 Georgia,serif;margin:0 0 9px}
+#goldenstock-preview h2{font-size:19px;margin:0 0 12px;font-weight:500}
+#goldenstock-preview p{margin:0 0 16px}
+#goldenstock-preview .muted{color:var(--gs-muted)}
+#goldenstock-preview .row{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+#goldenstock-preview .actions{display:flex;gap:8px;flex-wrap:wrap}
+#goldenstock-preview .panel{padding:22px;background:var(--gs-panel);border:1px solid var(--gs-line);border-radius:8px;margin-top:20px}
+#goldenstock-preview .notice{padding:12px 18px;background:var(--gs-gold);font-size:13px}
+#goldenstock-preview .cols{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+#goldenstock-preview .stats{display:flex;gap:32px;margin-top:24px;flex-wrap:wrap}
+#goldenstock-preview .stat strong{display:block;font:28px Georgia,serif;margin-top:6px}
+#goldenstock-preview table{border-collapse:collapse;width:100%;font-size:14px}
+#goldenstock-preview td,#goldenstock-preview th{padding:14px 10px;border-bottom:1px solid var(--gs-line);text-align:left;font-weight:400}
+#goldenstock-preview th{color:var(--gs-muted);font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+#goldenstock-preview .table-wrap{overflow-x:auto}
+#goldenstock-preview .status{display:inline-block;padding:3px 8px;border-radius:4px;background:var(--gs-bg);font-size:12px}
+#goldenstock-preview .warning{background:var(--gs-gold)}
+#goldenstock-preview input:not([type=checkbox]),#goldenstock-preview select{padding:10px;border:1px solid var(--gs-line);border-radius:5px;background:var(--gs-panel);color:var(--gs-ink);max-width:100%;width:100%}
+#goldenstock-preview label{display:block;margin-bottom:14px}
+#goldenstock-preview .source{font-family:Georgia,serif;background:var(--gs-bg);padding:24px;min-height:190px}
+#goldenstock-preview .source mark{background:var(--gs-gold);color:var(--gs-ink)}
+#goldenstock-preview .bar{height:7px;border-radius:4px;background:var(--gs-line);margin:16px 0}
+#goldenstock-preview .bar span{display:block;height:100%;width:65%;background:var(--gs-brand)}
+#goldenstock-preview footer{border-top:1px solid var(--gs-line);padding:12px 25px;color:var(--gs-muted);font-size:12px}
+#goldenstock-preview .compact td{padding-top:8px;padding-bottom:8px}
+@media(max-width:700px){#goldenstock-preview .shell{grid-template-columns:1fr}#goldenstock-preview nav{flex-direction:row;overflow-x:auto;padding:10px;border-right:0;border-bottom:1px solid var(--gs-line)}#goldenstock-preview nav button{white-space:nowrap}#goldenstock-preview main{padding:18px;min-height:620px}#goldenstock-preview .cols{grid-template-columns:1fr}#goldenstock-preview header{padding:16px}#goldenstock-preview .logo{font-size:23px}#goldenstock-preview .panel{padding:16px}#goldenstock-preview h1{font-size:28px}}
+</style>
+<header><div class="logo">GoldenStock<span class="label"> / Research workspace</span></div><span class="status">Pilot Fund · Analyst</span></header>
+<div class="notice">Interactive design prototype. All financial figures are synthetic. No files leave this preview.</div>
+<div class="shell">
+<nav aria-label="Workspace navigation">
+<button data-page="watchlist" class="cursor-interaction" aria-pressed="true">My companies</button>
+<button data-page="company" class="cursor-interaction">Company research</button>
+<button data-page="upload" class="cursor-interaction">Upload</button>
+<button data-page="review" class="cursor-interaction">Review facts</button>
+<button data-page="models" class="cursor-interaction">Model library</button>
+<button data-page="lab" class="cursor-interaction">AI Lab</button>
+<button data-page="changes" class="cursor-interaction">Notifications</button>
+</nav>
+<main id="gs-content"></main></div>
+<footer><span id="gs-message" role="status" aria-live="polite">Design preview · local processing planned · no live financial data</span></footer>
+<script>
+(()=>{
+const root=document.getElementById('goldenstock-preview');
+const content=root.querySelector('#gs-content');
+const message=root.querySelector('#gs-message');
+const valid=['watchlist','company','upload','review','models','lab','changes'];
+const saved=window.openai?.widgetState?.privateContent||{};
+const state={page:valid.includes(saved.page)?saved.page:'watchlist',reviewed:false,shared:false,research:false,job:false,empty:false,selected:'Example Digital Bank',compact:false};
+const btn=(text,action,primary=false)=>'<button class="cursor-interaction '+(primary?'primary':'')+'" data-action="'+action+'">'+text+'</button>';
+const go=(text,page)=>'<button class="cursor-interaction" data-page="'+page+'">'+text+'</button>';
+const note=t=>{message.textContent=t};
+const persist=()=>{window.openai?.setWidgetState?.({modelContent:{screen:state.page},privateContent:{page:state.page}})?.catch(()=>{})};
+function render(){
+root.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.page===state.page)));
+content.classList.toggle('compact',state.compact);
+if(state.page==='watchlist')content.innerHTML='<div class="row"><div><div class="label">Your coverage</div><h1>My companies</h1><p class="muted">Evidence first. Every valuation starts with reviewed data.</p></div>'+btn(state.empty?'Restore companies':'Preview empty state','empty')+'</div><div class="panel"><label>Find a company<input id="gs-search" placeholder="Search by name" aria-label="Search companies"></label><div class="table-wrap"><table><thead><tr><th>Company</th><th>Coverage</th><th>Latest model</th><th></th></tr></thead><tbody>'+(!state.empty?['Sberbank','Tinkoff','JPMorgan Chase','HSBC','Nu Holdings'].map((n,i)=>'<tr data-company-row="'+n.toLowerCase()+'"><td>'+n+'</td><td><span class="status">'+(i<2?'Source verification pending':'Proposed coverage')+'</span></td><td>Not created</td><td>'+go('Open','company')+'</td></tr>').join(''):'<tr><td colspan="4">No companies yet. Search and add your first company.</td></tr>')+'</tbody></table></div></div>';
+if(state.page==='company')content.innerHTML='<div class="row"><div><div class="label">Synthetic demonstration company</div><h1>Example Digital Bank</h1><p class="muted">FY 2025 · USD · all values below are fictional</p></div><div class="actions">'+btn('Research','research',true)+go('Upload data','upload')+'</div></div><div class="stats"><div class="stat"><span class="muted">Revenue</span><strong>$1,250m</strong></div><div class="stat"><span class="muted">Net income</span><strong>$210m</strong></div><div class="stat"><span class="muted">Source conflicts</span><strong>'+(state.reviewed?'0':'1')+'</strong></div></div><div class="cols"><section class="panel"><h2>Research summary</h2><p>'+(state.research?'Demo summary: revenue increased from $1,000m to $1,250m. The annual report and presentation use different scales. Check the source before modelling.':'Run Research to preview an evidence-linked summary.')+'</p><p class="muted">Synthetic annual report · page 3</p>'+go('Inspect evidence','review')+'</section><section class="panel"><h2>Valuation readiness</h2><p>'+(state.reviewed?'Revenue reviewed. Demo inputs are ready for the model workflow.':'Revenue scale conflict needs review before an approved valuation.')+'</p><div class="actions">'+go('Review facts','review')+go('Choose a model','models')+'</div></section></div>';
+if(state.page==='upload')content.innerHTML='<h1>Upload company data</h1><p class="muted">Private to you until you explicitly share a result.</p><section class="panel"><label>Company<select><option>Example Digital Bank (synthetic)</option></select></label><label>Document<input id="gs-file" type="file" accept=".pdf,.pptx,.xlsx"></label><p class="muted">Preview checks only the extension and size. No parsing or upload occurs here.</p><div class="actions">'+btn('Preview processing','upload',true)+btn('Preview failure','failure')+'</div><div id="gs-upload-state" role="status">'+(state.job?'<div class="bar"><span></span></div><p>Demo queue: extracting tables, 65%.</p>'+go('Open extracted facts','review'):'')+'</div></section>';
+if(state.page==='review')content.innerHTML='<div class="row"><div><div class="label">Evidence review</div><h1>Revenue · FY 2025</h1></div><span class="status warning">'+(state.reviewed?'Reviewed in this preview':'Scale conflict')+'</span></div><div class="cols"><section class="panel"><h2>Source excerpt</h2><div class="source"><p>EXAMPLE DIGITAL BANK<br>Annual report (synthetic), p. 3</p><p>USD millions</p><p>Revenue <mark>1,250</mark><br>Net income 210</p></div><p class="muted">Alternate presentation says USD billions: 1.25. Both values can agree after normalisation.</p></section><section class="panel"><h2>Normalised fact</h2><label>Revenue, USD millions<input id="gs-value" type="number" value="1250" step="0.01"></label><label>Review note<input id="gs-reason" value="Confirmed against page 3; normalised scale."></label><div class="actions">'+btn('Confirm fact','confirm',true)+btn('Flag conflict','flag')+'</div><p id="gs-review-status" role="status">'+(state.reviewed?'Saved in preview. A real review will create a new version.':'Reviewer action required.')+'</p></section></div>';
+if(state.page==='models')content.innerHTML='<div class="row"><div><h1>Model library</h1><p class="muted">Personal drafts and versions shared within your fund.</p></div>'+btn('Upload template','template')+'</div><section class="panel"><div class="row"><div><h2>Bank valuation · demonstration template</h2><p class="muted">Version 0.1 · You · '+(state.shared?'Shared with Pilot Fund':'Private')+'</p></div><span class="status">'+(state.reviewed?'Inputs reviewed':'Review required')+'</span></div><p>Method selection and assumptions are placeholders. This preview does not calculate a financial valuation.</p><div class="actions">'+btn(state.shared?'Make private':'Make shared','share')+btn('Build valuation','build',true)+'</div><div id="gs-model-state" role="status"></div></section><section class="panel"><h2>Export the same model snapshot</h2><div class="actions">'+['XLSX','PDF','PPTX'].map(x=>btn('Preview '+x,'export-'+x)).join('')+'</div><p class="muted">Export controls explain the future result. Real files arrive in GS-020.</p></section><div id="gs-publish"></div>';
+if(state.page==='lab')content.innerHTML='<h1>AI Lab</h1><p class="muted">Compare local models on the same versioned task.</p><section class="panel"><div class="cols"><label>Task<select><option>Extract financial facts</option><option>Summarise evidence</option></select></label><label>Dataset<select><option>Synthetic starter · v0.1</option></select></label></div><p><label><input type="checkbox" checked> Local model A (placeholder)</label><label><input type="checkbox" checked> Local model B (placeholder)</label></p>'+btn('Queue comparison','compare',true)+'<div id="gs-lab-state" role="status"></div><div class="table-wrap"><table><tr><th>Model</th><th>Accuracy</th><th>Latency</th><th>State</th></tr><tr><td>Local A</td><td>Not measured</td><td>Not measured</td><td>Not run</td></tr><tr><td>Local B</td><td>Not measured</td><td>Not measured</td><td>Not run</td></tr></table></div></section>';
+if(state.page==='changes')content.innerHTML='<h1>Reporting updates</h1><p class="muted">Only changes to followed companies. Notifications stay in the app.</p><section class="panel"><div class="label">Example notification</div><h2>New financial disclosure</h2><p>Example Digital Bank · synthetic report, version 2</p><p>The previous approved model stays unchanged. Review the new facts before creating another valuation.</p>'+go('Review new facts','review')+'</section><section class="panel"><h2>Local monitoring</h2><p>Checks pause while the host computer is off. The next startup checks for missed publications.</p></section>';
+}
+root.addEventListener('input',e=>{if(e.target.id==='gs-search')root.querySelectorAll('[data-company-row]').forEach(r=>r.hidden=!r.dataset.companyRow.includes(e.target.value.toLowerCase()))});
+root.addEventListener('click',e=>{
+const target=e.target.closest('button');if(!target)return;
+if(target.dataset.page){state.page=target.dataset.page;render();persist();return}
+const a=target.dataset.action;
+if(a==='empty'){state.empty=!state.empty;render()}
+if(a==='research'){state.research=true;render();note('Demo summary generated from a synthetic excerpt. No online search occurred.')}
+if(a==='upload'){const f=root.querySelector('#gs-file').files[0];const box=root.querySelector('#gs-upload-state');if(!f){box.textContent='Choose a PDF, PPTX or XLSX file first.';return}if(!/\.(pdf|pptx|xlsx)$/i.test(f.name)||f.size>50*1024*1024){box.textContent='Unsupported file or size over 50 MB.';return}state.job=true;box.innerHTML='<div class="bar"><span></span></div><p>Demo queue: extracting tables, 65%. File content was not read.</p>'+go('Open extracted facts','review')}
+if(a==='failure')root.querySelector('#gs-upload-state').textContent='Demo error: document could not be parsed. Original file stays unchanged. Retry or choose another file.';
+if(a==='confirm'){const v=root.querySelector('#gs-value').value;const reason=root.querySelector('#gs-reason').value.trim();if(v===''||!Number.isFinite(Number(v))||!reason){note('Enter a numeric value and a review note.');return}state.reviewed=true;root.querySelector('#gs-review-status').textContent='Confirmed in preview: '+v+' USD millions. '+reason;note('Review recorded only in this preview.')}
+if(a==='flag'){state.reviewed=false;root.querySelector('#gs-review-status').textContent='Conflict flagged. Approved valuation is blocked.'}
+if(a==='share'){if(state.shared){state.shared=false;render()}else root.querySelector('#gs-publish').innerHTML='<section class="panel"><h2>Share with Pilot Fund?</h2><p>Every member will see this template and its included data. This demo contains only synthetic data. Private dependencies would block publication.</p>'+btn('Confirm sharing','publish',true)+btn('Cancel','cancel')+'</section>'}
+if(a==='publish'){state.shared=true;render();note('Shared in preview. No server data changed.')}
+if(a==='cancel')root.querySelector('#gs-publish').innerHTML='';
+if(a==='template')note('Template upload will validate formulas, hidden sheets and private dependencies. Implementation: GS-017.');
+if(a==='build')root.querySelector('#gs-model-state').textContent=state.reviewed?'Demo workflow ready. Real deterministic calculation is implemented in GS-018.':'Blocked: review the conflicting revenue fact first.';
+if(a?.startsWith('export-'))note(state.reviewed?'Preview '+a.slice(7)+': same version, assumptions and source citations. Real export is not implemented.':'Review required before an approved export. Draft export will carry a warning.');
+if(a==='compare')root.querySelector('#gs-lab-state').textContent='Demo queue: 2 runs, identical dataset and prompt version. One active GPU job at a time. No benchmark has run.';
+});
+window.addEventListener('openai:set_globals',e=>{const p=e.detail?.globals?.widgetState?.privateContent?.page;if(valid.includes(p)){state.page=p;render()}});
+render();
+if(globalThis.Tweak){const tweak=new Tweak({container:root,onChange:render});tweak.addToggle(state,'compact',{label:'Compact tables'});}
+})();
+</script>
+</div>

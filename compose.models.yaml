@@ -1,0 +1,14 @@
+# Explicit provisioning only: downloads public weights into the model volume.
+# The inference service remains on the internal network without published ports.
+services:
+  model-download:
+    image: ollama/ollama:0.13.5
+    profiles: [download]
+    volumes:
+      - model_data:/root/.ollama
+    networks: [ingress]
+    environment:
+      OLLAMA_NO_CLOUD: "1"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'ollama serve >/tmp/server.log 2>&1 & server=$$!; trap "kill $$server" EXIT; sleep 3; ollama pull qwen3:4b-instruct-2507-q4_K_M && ollama pull qwen3:1.7b-q4_K_M'

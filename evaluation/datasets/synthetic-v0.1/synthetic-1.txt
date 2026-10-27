@@ -1,0 +1,7 @@
+SYNTHETIC TEST DOCUMENT. NOT A REAL COMPANY.
+Example Bank 1 | FY 2025
+Financial values: USD millions. Customers: persons.
+revenue: 1050
+net_income: 110
+credit_losses: -21
+active_customers: 201000

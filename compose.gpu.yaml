@@ -1,0 +1,4 @@
+# Optional override after Docker/WSL GPU support is verified. No model is downloaded.
+services:
+  inference:
+    gpus: all

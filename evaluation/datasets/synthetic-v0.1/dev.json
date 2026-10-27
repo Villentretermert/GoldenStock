@@ -1,0 +1,62 @@
+[
+  {
+    "id": "synthetic-4-revenue",
+    "company": "Example Bank 4",
+    "metric": "revenue",
+    "period": "FY2025",
+    "currency": "USD",
+    "unit": "money",
+    "scale": "million",
+    "source_id": "synthetic-4",
+    "locator": "line:4",
+    "value": "1200",
+    "abs_tolerance": "0",
+    "split": "dev",
+    "review_state": "synthetic_unreviewed"
+  },
+  {
+    "id": "synthetic-4-net_income",
+    "company": "Example Bank 4",
+    "metric": "net_income",
+    "period": "FY2025",
+    "currency": "USD",
+    "unit": "money",
+    "scale": "million",
+    "source_id": "synthetic-4",
+    "locator": "line:5",
+    "value": "140",
+    "abs_tolerance": "0",
+    "split": "dev",
+    "review_state": "synthetic_unreviewed"
+  },
+  {
+    "id": "synthetic-4-credit_losses",
+    "company": "Example Bank 4",
+    "metric": "credit_losses",
+    "period": "FY2025",
+    "currency": "USD",
+    "unit": "money",
+    "scale": "million",
+    "source_id": "synthetic-4",
+    "locator": "line:6",
+    "value": "-24",
+    "abs_tolerance": "0",
+    "split": "dev",
+    "review_state": "synthetic_unreviewed"
+  },
+  {
+    "id": "synthetic-4-active_customers",
+    "company": "Example Bank 4",
+    "metric": "active_customers",
+    "period": "FY2025",
+    "currency": "N/A",
+    "unit": "persons",
+    "scale": "one",
+    "source_id": "synthetic-4",
+    "locator": "line:7",
+    "value": "204000",
+    "abs_tolerance": "0",
+    "split": "dev",
+    "review_state": "synthetic_unreviewed"
+  }
+]

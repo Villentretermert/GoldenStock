@@ -1,0 +1,40 @@
+{
+  "version": "0.1",
+  "synthetic": true,
+  "production_qualified": false,
+  "documents": [
+    {
+      "source_id": "synthetic-1",
+      "file": "synthetic-1.txt",
+      "split": "train",
+      "sha256": "acb166a8abdf608a17bb7031c09abf2605bdbc1f2fceab5eefd67fbc96ee64f5"
+    },
+    {
+      "source_id": "synthetic-2",
+      "file": "synthetic-2.txt",
+      "split": "train",
+      "sha256": "8be67c3c2a9b2f75100262c3cfce0a49a2ff6b0c880b576371ab8fb5d2c895fd"
+    },
+    {
+      "source_id": "synthetic-3",
+      "file": "synthetic-3.txt",
+      "split": "train",
+      "sha256": "0b64cae1e29bf2d3d01f0d9320899ea4fca0ae4eaaecddaf484e4c1b3f8d6069"
+    },
+    {
+      "source_id": "synthetic-4",
+      "file": "synthetic-4.txt",
+      "split": "dev",
+      "sha256": "a13dc98006a3fcae8ffbe1d263e4a025d7d28c740308d9d427c2fae457027550"
+    },
+    {
+      "source_id": "synthetic-5",
+      "file": "synthetic-5.txt",
+      "split": "holdout",
+      "sha256": "78ffa11bb3cb5ea5e472d29e0429cb8f51784942bdfdd3008227361546d99e83"
+    }
+  ],
+  "facts": 20,
+  "reviewers": [],
+  "real_corpus_status": "awaiting_independent_annotation"
+}

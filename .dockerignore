@@ -1,0 +1,12 @@
+*
+!Dockerfile
+!requirements.txt
+!requirements.lock
+!pyproject.toml
+!alembic.ini
+!migrations/
+!migrations/**
+!src/
+!src/**
+**/__pycache__/
+**/*.pyc

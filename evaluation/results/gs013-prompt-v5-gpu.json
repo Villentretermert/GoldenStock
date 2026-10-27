@@ -1,0 +1,8 @@
+{
+  "baseline_used_mib": 2065,
+  "peak_used_mib": 5464,
+  "minimum_free_mib": 6623,
+  "after_used_mib": 2065,
+  "sample_count": 22,
+  "scope": "Host GPU includes other applications; sampled, not a hard VRAM guarantee"
+}

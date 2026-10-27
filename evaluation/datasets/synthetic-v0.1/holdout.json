@@ -1,0 +1,62 @@
+[
+  {
+    "id": "synthetic-5-revenue",
+    "company": "Example Bank 5",
+    "metric": "revenue",
+    "period": "FY2025",
+    "currency": "USD",
+    "unit": "money",
+    "scale": "million",
+    "source_id": "synthetic-5",
+    "locator": "line:4",
+    "value": "1250",
+    "abs_tolerance": "0",
+    "split": "holdout",
+    "review_state": "synthetic_unreviewed"
+  },
+  {
+    "id": "synthetic-5-net_income",
+    "company": "Example Bank 5",
+    "metric": "net_income",
+    "period": "FY2025",
+    "currency": "USD",
+    "unit": "money",
+    "scale": "million",
+    "source_id": "synthetic-5",
+    "locator": "line:5",
+    "value": "150",
+    "abs_tolerance": "0",
+    "split": "holdout",
+    "review_state": "synthetic_unreviewed"
+  },
+  {
+    "id": "synthetic-5-credit_losses",
+    "company": "Example Bank 5",
+    "metric": "credit_losses",
+    "period": "FY2025",
+    "currency": "USD",
+    "unit": "money",
+    "scale": "million",
+    "source_id": "synthetic-5",
+    "locator": "line:6",
+    "value": "-25",
+    "abs_tolerance": "0",
+    "split": "holdout",
+    "review_state": "synthetic_unreviewed"
+  },
+  {
+    "id": "synthetic-5-active_customers",
+    "company": "Example Bank 5",
+    "metric": "active_customers",
+    "period": "FY2025",
+    "currency": "N/A",
+    "unit": "persons",
+    "scale": "one",
+    "source_id": "synthetic-5",
+    "locator": "line:7",
+    "value": "205000",
+    "abs_tolerance": "0",
+    "split": "holdout",
+    "review_state": "synthetic_unreviewed"
+  }
+]

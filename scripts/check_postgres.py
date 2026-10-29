@@ -199,6 +199,51 @@ def main():
                     sharing=pool.submit(client.patch,'/api/v1/templates/'+template_id+'/visibility',json={'shared':True,'revision':revision})
                     assert calculating.result().status_code==201
                     assert sharing.result().status_code==200
+                # Valuations serialize receipts and fence source-review changes too.
+                assert client.post('/api/v1/facts/'+current+'/reviews',json={
+                    'expected_revision':2,'decision':'accepted','note':'Synthetic renewed review for valuation'}).status_code==201
+                digest=client.get('/api/v1/review-state?company_id=sber').json()['state_hash']
+                fresh=client.post('/api/v1/input-snapshots',json=dict(company_id='sber',title='Valuation source',expected_state_hash=digest)).json()['id']
+                calculation['snapshot_id']=fresh
+                calculation['scenarios']['base']['profit_owners']=dict(fact_id=current,note='Synthetic common profit checked',confirmed=True)
+                fresh_calculation=calculate_once('pg-valuation-source').json()['id']
+                valuation=dict(calculation_id=fresh_calculation,title='Synthetic PostgreSQL valuation',method='pe',currency='USD',
+                    valuation_date='2025-12-31',reference_year=2025,method_note='Synthetic comparable banks and multiple basis',
+                    scope_note='Synthetic common equity, excluding non-controlling interests',
+                    shares_note='Synthetic ordinary common shares, no ADR conversion',method_confirmed=True,comparability_confirmed=True,
+                    scenarios={'base':{key:dict(value=value,note='Synthetic confirmed assumption',confirmed=True)
+                        for key,value in dict(shares='10',profit_owners='100',preferred_dividends='0',multiple='10').items()}})
+                def value_once(key):
+                    return client.post('/api/v1/valuations',json=valuation,headers={'Idempotency-Key':key})
+                with ThreadPoolExecutor(max_workers=3) as pool:
+                    valuations=list(pool.map(lambda _:value_once('pg-valuation-first'),range(3)))
+                assert all(r.status_code==201 for r in valuations),[r.text for r in valuations]
+                assert len({r.json()['id'] for r in valuations})==1
+                valuation_id=valuations[0].json()['id']
+                import goldenstock.valuations as valuation_api
+                original_current=valuation_api.source_current
+                valuation_locked=threading.Event();finish_valuation=threading.Event()
+                def gated_current(*args,**kwargs):
+                    result=original_current(*args,**kwargs)
+                    valuation_locked.set();assert finish_valuation.wait(10)
+                    return result
+                valuation_api.source_current=gated_current
+                try:
+                    with ThreadPoolExecutor(max_workers=2) as pool:
+                        valuing=pool.submit(value_once,'pg-valuation-review-race')
+                        assert valuation_locked.wait(10)
+                        revising=pool.submit(client.post,'/api/v1/facts/'+current+'/reviews',json={
+                            'expected_revision':3,'decision':'unreviewed','note':'Synthetic concurrent valuation review change'})
+                        time.sleep(.2)
+                        assert not revising.done(),'Review overtook a locked valuation snapshot'
+                        finish_valuation.set()
+                        assert valuing.result().status_code==201
+                        assert revising.result().status_code==201
+                finally: valuation_api.source_current=original_current
+                assert value_once('pg-valuation-stale').status_code==409
+                assert client.get('/api/v1/valuations/'+valuation_id).json()['inputs_current'] is False
+                assert client.post('/api/v1/valuations/'+valuation_id+'/replay').json()['matched']
+                print('Valuation PostgreSQL PASS: idempotent receipts, review fencing, stale source rejection and historical replay.')
                 print('Calculation PostgreSQL PASS: idempotency, replay, review fencing and stale input rejection.')
                 print('Template PostgreSQL PASS: idempotent upload and unique concurrent version numbers.')
                 print('PostgreSQL integration PASS: migrations, concurrent upload/fact/review/snapshot/AI deduplication, single GPU task, single successor, crash recovery and stale-worker fencing.')

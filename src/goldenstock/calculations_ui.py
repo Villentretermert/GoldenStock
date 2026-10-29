@@ -76,7 +76,7 @@ def mount_calculations_ui(app):
         if data['inputs_current'] is False: body+='Source review has changed: these historical results require a new calculation. '
         if data['inputs_current'] is None: body+='All inputs are manually confirmed assumptions. '
         if not payload['checks']: body+='No control checks were configured. '
-        body+='</div>'+form('/api/v1/calculations/'+run_id+'/replay','Verify reproducibility',next='/calculations/'+run_id+'?replayed=1')
+        body+='</div><p><a class="button" href="/valuations/new?calculation_id='+e(run_id)+'">Value this calculation</a></p>'+form('/api/v1/calculations/'+run_id+'/replay','Verify reproducibility',next='/calculations/'+run_id+'?replayed=1')
         if request.query_params.get('replayed')=='1': body+='<p role="status">Replay matched the saved result hash.</p>'
         body+='<div class="table-wrap"><table class="template-map"><thead><tr><th>Field / unit / period</th>'
         names=list(result['scenarios']);body+=''.join(f'<th>{e(n.title())}</th>' for n in names)+'</tr></thead><tbody>'

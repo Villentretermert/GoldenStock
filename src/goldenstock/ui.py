@@ -26,7 +26,7 @@ button:disabled{opacity:.5;cursor:wait}input,select{max-width:100%;width:100%;pa
 label{display:block;margin:10px 0 16px}label input,label select{display:block;margin-top:5px}form{margin:0}form.inline{display:inline-block}
 .login{max-width:460px;margin:60px auto}.login h1{font-size:34px}.notice{border-left:3px solid #b58a39;padding:12px 18px;background:#f8f1df;margin:18px 0}
 #message{color:#9b2929;white-space:pre-wrap}.table-wrap{overflow-x:auto}td,th{padding:12px;text-align:left;vertical-align:top;border-bottom:1px solid #d8e0d6}td{max-width:600px;overflow-wrap:anywhere}
-.template-map{min-width:760px} input.check{width:auto;display:inline}fieldset{border:1px solid #d8e0d6;border-radius:8px;margin:16px 0;padding:16px;min-width:0}
+textarea{display:block;width:100%;max-width:100%;font:inherit;padding:10px;border:1px solid #b8c7b9;border-radius:5px}.sensitivity td,.sensitivity th{white-space:nowrap;overflow-wrap:normal}.valuation-price{font-size:32px;margin:12px 0;color:#285641}.template-map{min-width:760px} input.check{width:auto;display:inline}fieldset{border:1px solid #d8e0d6;border-radius:8px;margin:16px 0;padding:16px;min-width:0}
 @media(max-width:600px){h1{font-size:30px}header{padding:16px 22px;gap:12px}main{padding:22px 16px}.card{padding:18px}nav{gap:12px;font-size:14px}}
 '''
 JS = '''
@@ -34,7 +34,16 @@ document.querySelectorAll('form[data-api]').forEach(form=>form.addEventListener(
 event.preventDefault();const message=document.getElementById('message');message.textContent='';
 const button=form.querySelector('button');if(button)button.disabled=true;
 try{const fields=new FormData(form);let body;const headers={'X-CSRF-Token':document.querySelector('meta[name="csrf"]').content};
-if(form.dataset.calculation){
+if(form.dataset.valuation){
+const v=Object.fromEntries(fields);const scenarios={};
+for(const name of ['base','optimistic','stress']){if(name!=='base'&&!fields.has('enable.'+name))continue;
+scenarios[name]=Object.create(null);for(const [key,value] of fields){const p=key.split('.');if(p[0]!==name||p.length!==3)continue;
+const item=scenarios[name][p[1]]||={confirmed:fields.has('method_confirmed')};if(p[2]==='note'||value.trim())item[p[2]]=value.trim();}}
+const quote=v.quote_price?{price:v.quote_price.trim(),date:v.quote_date,currency:v.currency,instrument:v.quote_instrument,source:v.quote_source,kind:'ordinary_share'}:null;
+body=JSON.stringify({calculation_id:v.calculation_id,title:v.title,method:v.method,currency:v.currency,valuation_date:v.valuation_date,reference_year:Number(v.reference_year),method_note:v.method_note,scope_note:v.scope_note,shares_note:v.shares_note,method_confirmed:fields.has('method_confirmed'),capital_confirmed:fields.has('capital_confirmed'),comparability_confirmed:fields.has('comparability_confirmed'),operating:v.operating==='true',operating_month:v.operating_month||null,operating_note:v.operating_note||'',quote,scenarios});
+if(form.dataset.payload!==body){form.dataset.requestKey=crypto.randomUUID();form.dataset.payload=body;}
+headers['Idempotency-Key']=form.dataset.requestKey;headers['Content-Type']='application/json';}
+else if(form.dataset.calculation){
 const values=Object.fromEntries(fields);const scenarios={};
 for(const name of ['base','optimistic','stress']){if(name!=='base'&&!fields.has('enable.'+name))continue;
 scenarios[name]=Object.create(null);for(const [key,value] of fields){const parts=key.split('.');if(parts[0]!==name||parts.length!==3)continue;
@@ -49,7 +58,7 @@ else{let values=Object.fromEntries(fields);for(const k of ['shared','active'])if
 if('revision' in values)values.revision=Number(values.revision);body=JSON.stringify(values);headers['Content-Type']='application/json';}
 const response=await fetch(form.dataset.api,{method:form.dataset.method||'POST',headers,body});const result=await response.json();
 if(!response.ok)throw new Error(typeof result.detail==='string'?result.detail:'Please check the entered values');
-location.href=form.dataset.calculation?'/calculations/'+result.id:(form.dataset.next||location.pathname+location.search);
+location.href=form.dataset.valuation?'/valuations/'+result.id:form.dataset.calculation?'/calculations/'+result.id:(form.dataset.next||location.pathname+location.search);
 }catch(error){message.textContent=error.message;message.scrollIntoView({block:'center'});}finally{if(button)button.disabled=false;}
 }));
 '''
@@ -65,7 +74,7 @@ def hidden(name, value):
 
 def page(title, body, actor=None):
     nonce = secrets.token_urlsafe(20)
-    nav = '' if not actor else '<nav><a href="/">Watchlist</a><a href="/catalog">Companies</a><a href="/sources">Sources</a><a href="/models">Models</a><a href="/templates">Templates</a><a href="/calculations">Calculations</a><a href="/files">Files & jobs</a>'+('<a href="/team">Team</a>' if actor.account_admin else '')+'</nav><span class="muted">'+e(actor.login)+'</span>'+form('/api/v1/auth/logout','Sign out',next='/login')
+    nav = '' if not actor else '<nav><a href="/">Watchlist</a><a href="/catalog">Companies</a><a href="/sources">Sources</a><a href="/models">Models</a><a href="/templates">Templates</a><a href="/calculations">Calculations</a><a href="/valuations">Valuations</a><a href="/files">Files & jobs</a>'+('<a href="/team">Team</a>' if actor.account_admin else '')+'</nav><span class="muted">'+e(actor.login)+'</span>'+form('/api/v1/auth/logout','Sign out',next='/login')
     html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="csrf" content="{e(actor.csrf if actor else '')}"><title>{e(title)} · GoldenStock</title><style>{CSS}</style></head>
     <body><header><a class="brand" href="/">GoldenStock</a>{nav}</header><main><div id="message" role="alert"></div>{body}</main><script nonce="{nonce}">{JS}</script></body></html>'''
@@ -82,12 +91,16 @@ def actor_or_none(request):
 
 def company_card(c):
     action = form('/api/v1/favorites/'+c['id'],'Remove from watchlist' if c['favorite'] else 'Add to watchlist',method='DELETE' if c['favorite'] else 'PUT')
+    valuation=c.get('latest_valuation')
+    status=('<a href="/valuations/'+e(valuation['id'])+'">Open saved valuation ('+e(valuation['method'].upper())+')</a>' if valuation else 'No saved valuation')
     return f'''<article class="card"><span class="tag">{'Candidate — awaiting confirmation' if c['candidate'] else 'Pilot company'}</span>
     <h2 style="margin-top:16px"><a href="/company/{e(c['id'])}">{e(c['name'])}</a></h2><p class="muted">{e(c['identifier'])}</p>
-    <p>Report data: {e(c['freshness'])}<br>Valuation: not calculated</p>{action}</article>'''
+    <p>Report data: {e(c['freshness'])}<br>{status}</p>{action}</article>'''
 
 
 def mount_ui(app):
+    from goldenstock.valuations_ui import mount_valuations_ui
+    mount_valuations_ui(app)
     from goldenstock.calculations_ui import mount_calculations_ui
     mount_calculations_ui(app)
     from goldenstock.templates_ui import mount_templates_ui
@@ -184,7 +197,7 @@ def mount_ui(app):
         body += '<div class="grid">'+''.join(company_card(c) for c in entries)+'</div>'
         if not entries:
             body += '<div class="card"><h2>No companies yet</h2><p>Add a company from the catalog to build your personal watchlist.</p><a class="button" href="/catalog">Browse companies</a></div>'
-        return page('Companies',body+'<div class="notice">AI summaries and valuations are not available yet. Missing financial data is shown explicitly.</div>',actor)
+        return page('Companies',body+'<div class="notice">Saved valuations belong to your account. Open a valuation to check its source freshness, method and assumptions. Missing financial data remains explicit.</div>',actor)
 
     @app.get('/company/{company_id}', response_class=HTMLResponse)
     def details(company_id: str, request: Request):
@@ -193,14 +206,14 @@ def mount_ui(app):
             return RedirectResponse('/login',status_code=303)
         c = company(company_id,request)
         source = '<a href="/ai/'+e(company_id)+'">AI workspace</a> · <a href="/facts/'+e(company_id)+'">Facts & conflicts</a> · <a href="/sources?company_id='+e(company_id)+'">Public source registry</a> · Report coverage remains incomplete.'
-        return page(c['name'],f'<h1>{e(c["name"])}</h1>'+company_card(c)+f'<div class="card"><h2>Evidence & valuation</h2><p>{source}</p><p>No AI summary. No financial model has been calculated.</p><a class="button" href="/files?company_id={e(company_id)}">Upload evidence</a></div>',actor)
+        return page(c['name'],f'<h1>{e(c["name"])}</h1>'+company_card(c)+f'<div class="card"><h2>Evidence & valuation</h2><p>{source}</p><p>Use the AI workspace for source-backed summaries and Calculations for your saved scenarios.</p><a class="button" href="/files?company_id={e(company_id)}">Upload evidence</a></div>',actor)
 
     @app.get('/models', response_class=HTMLResponse)
     def models_page(request: Request, q: str = ''):
         actor = actor_or_none(request)
         if not actor:
             return RedirectResponse('/login',status_code=303)
-        body = '<h1>Model drafts</h1><p class="muted">Draft names and access settings. Use Templates for validated Excel structures. Financial calculations arrive later.</p><div class="card">'+form('/api/v1/models','Create private draft','<label>Draft title<input name="title" required maxlength="160"></label>')+'</div><div class="grid">'
+        body = '<h1>Model drafts</h1><p class="muted">Draft names and access settings. Use Templates for validated Excel structures. Use Calculations for saved scenarios and Valuations for common-equity estimates.</p><div class="card">'+form('/api/v1/models','Create private draft','<label>Draft title<input name="title" required maxlength="160"></label>')+'</div><div class="grid">'
         for m in list_models(request,q):
             controls = '' if m['owner_id'] != actor.id else form('/api/v1/models/'+m['id']+'/visibility','Make private' if m['shared'] else 'Share draft title with fund',hidden('shared',str(not m['shared']).lower())+hidden('revision',m['revision']),method='PATCH')
             body += f'<div class="card"><h2>{e(m["title"])}</h2><p>{"Shared with fund" if m["shared"] else "Private"} · Revision {m["revision"]}</p>{controls}</div>'

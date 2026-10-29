@@ -101,7 +101,7 @@ def evaluate(node, values):
     return value
 
 
-def calculate(contract, scenarios, checks):
+def calculate(contract, scenarios, checks, *, input_parser=parse_number):
     fields=contract['fields']; by_cell={f['cell']:f for f in fields}
     trees={f['cell']:parse_formula(f['formula'])[0] for f in fields if f['role']!='input'}
     results={}
@@ -113,7 +113,7 @@ def calculate(contract, scenarios, checks):
             for cell in contract['order']:
                 field=by_cell[cell]
                 try:
-                    value=parse_number(inputs[field['key']]['value']) if field['role']=='input' else evaluate(trees[cell],values)
+                    value=input_parser(inputs[field['key']]['value']) if field['role']=='input' else evaluate(trees[cell],values)
                     values[cell]=value
                     # Display rounding never feeds subsequent formulas or control checks.
                     places=2 if field['unit'] in {'USD','EUR','GBP','RUB'} else 6

@@ -259,3 +259,24 @@ class CalculationRun(Base):
     output: Mapped[str]=mapped_column(Text)
     state: Mapped[str]=mapped_column(String(40))
     created: Mapped[float]=mapped_column(Float,default=time.time)
+
+
+class ValuationRun(Base):
+    __tablename__='valuation_runs'
+    __table_args__=(UniqueConstraint('owner_id','idem_key'),)
+    id: Mapped[str]=mapped_column(String(32),primary_key=True,default=new_id)
+    org_id: Mapped[str]=mapped_column(ForeignKey('organizations.id'),index=True)
+    owner_id: Mapped[str]=mapped_column(ForeignKey('users.id'))
+    company_id: Mapped[str]=mapped_column(ForeignKey('companies.id'))
+    calculation_id: Mapped[str]=mapped_column(ForeignKey('calculation_runs.id'))
+    title: Mapped[str]=mapped_column(String(160))
+    method: Mapped[str]=mapped_column(String(16))
+    policy: Mapped[str]=mapped_column(String(32))
+    state: Mapped[str]=mapped_column(String(24))
+    idem_key: Mapped[str]=mapped_column(String(100))
+    request_hash: Mapped[str]=mapped_column(String(64))
+    input_hash: Mapped[str]=mapped_column(String(64))
+    result_hash: Mapped[str]=mapped_column(String(64))
+    input: Mapped[str]=mapped_column(Text)
+    output: Mapped[str]=mapped_column(Text)
+    created: Mapped[float]=mapped_column(Float,default=time.time)

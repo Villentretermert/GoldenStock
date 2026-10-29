@@ -1,21 +1,39 @@
 """Public catalog plus user-owned favorites; no fabricated market data."""
 import time
 from fastapi import APIRouter, Request, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select,func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from goldenstock.auth import authenticate, audit
-from goldenstock.models import Company, Favorite
+from goldenstock.models import Company, Favorite, CalculationRun, ValuationRun
 
 router = APIRouter(prefix='/api/v1')
 
 
-def company_dict(company, favorite=False):
+def company_dict(company, favorite=False, activity=None):
     fresh = ('missing' if company.source_checked is None else
              'stale' if time.time()-company.source_checked > 90*86400 else 'current')
+    calculation,valuation=(activity or ({},{}))
+    latest=calculation.get(company.id)
     return dict(id=company.id, name=company.name, identifier=company.identifier,
                 candidate=company.candidate, favorite=favorite, source_url=company.source_url or None,
-                freshness=fresh, source_checked=company.source_checked, summary=None, last_calculation='not_run')
+                freshness=fresh, source_checked=company.source_checked, summary=None,
+                last_calculation=latest['state'] if latest else 'not_run',
+                latest_calculation=latest,latest_valuation=valuation.get(company.id))
+
+
+def private_activity(db,actor):
+    """Only receipt metadata, scoped before ranking; no private data crosses users."""
+    activity=[]
+    for model in (CalculationRun,ValuationRun):
+        columns=[model.id,model.company_id,model.state]
+        if model is ValuationRun: columns.append(model.method)
+        ranked=select(*columns,func.row_number().over(partition_by=model.company_id,
+            order_by=(model.created.desc(),model.id.desc())).label('position')).where(
+                model.org_id==actor.org_id,model.owner_id==actor.id).subquery()
+        activity.append({r['company_id']:{k:v for k,v in r.items() if k not in ('position','company_id')}
+            for r in db.execute(select(ranked).where(ranked.c.position==1)).mappings()})
+    return activity
 
 
 @router.get('/companies')
@@ -23,7 +41,8 @@ def companies(request: Request, q: str = '', favorites: bool = False):
     actor = authenticate(request)
     with Session(request.app.state.engine) as db:
         saved = set(db.scalars(select(Favorite.company_id).where(Favorite.user_id == actor.id)))
-        return [company_dict(c, c.id in saved) for c in db.scalars(select(Company).where(
+        activity=private_activity(db,actor)
+        return [company_dict(c, c.id in saved,activity) for c in db.scalars(select(Company).where(
             Company.name.icontains(q[:160], autoescape=True)).order_by(Company.name)) if not favorites or c.id in saved]
 
 
@@ -34,7 +53,7 @@ def company(company_id: str, request: Request):
         item = db.get(Company, company_id)
         if not item:
             raise HTTPException(404, 'Company not found')
-        return company_dict(item, db.get(Favorite, (actor.id, company_id)) is not None)
+        return company_dict(item, db.get(Favorite, (actor.id, company_id)) is not None,private_activity(db,actor))
 
 
 @router.put('/favorites/{company_id}')

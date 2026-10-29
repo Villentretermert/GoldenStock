@@ -234,6 +234,56 @@ let browser;
      const receipt=await(await page.request.get(base+'/api/v1/calculations/'+runId)).json();
      if(receipt.result.state!=='calculated_without_checks'||Object.keys(receipt.result.scenarios).length!==3)throw Error('Incorrect scenario receipt');
      await page.setViewportSize({width:1440,height:1000});
+     if(process.env.GS_QA_VALUATIONS==='1'){
+       for(const method of ['pe','pb','ddm','fcfe']){
+         await page.goto(base+'/valuations/new?calculation_id='+runId+'&method='+method+(method==='pe'?'&operating=true':''));
+         await page.getByLabel('Valuation title',{exact:true}).fill('Synthetic '+method.toUpperCase()+' - not issuer data');
+         for(const name of ['method_note','scope_note','shares_note'])await page.locator('[name="'+name+'"]').fill('Synthetic method, perimeter and common-share basis checked for QA');
+         await page.locator('[name="'+(['pe','pb'].includes(method)?'comparability_confirmed':'capital_confirmed')+'"]').check();
+         let values={shares:'10'};
+         if(method==='pe')values={...values,profit_owners:'100',preferred_dividends:'10',multiple:'10',monthly_revenue:'1000',mau:'100',cohort_start:'100',cohort_retained:'80',contribution_margin:'0.5',monthly_discount:'0.1'};
+         else if(method==='pb')values={...values,equity_total:'1000',equity_nci:'100',equity_preferred:'100',multiple:'1.5'};
+         else values={...values,cash_1:'100',cash_2:'100',cash_3:'100',cash_4:'100',cash_5:'100',cost_equity:'0.1',terminal_growth:'0'};
+         if(method==='pe'){
+           await page.locator('[name="operating_month"]').fill('2025-12');
+           await page.locator('[name="operating_note"]').fill('Synthetic monthly activity, cohort and constant contribution assumptions');
+         }
+         for(const name of (method==='pe'?['base','optimistic','stress']:['base'])){
+           if(name!=='base')await page.locator('[name="enable.'+name+'"]').check();
+           for(const [key,value] of Object.entries(values)){
+             if(method==='pe'&&key==='profit_owners')await page.locator('[name="'+name+'.'+key+'.source_key"]').selectOption('profit_owners');
+             else await page.locator('[name="'+name+'.'+key+'.value"]').fill(value);
+             await page.locator('[name="'+name+'.'+key+'.note"]').fill('Synthetic confirmed input and scope');
+           }
+         }
+         await page.getByText('Optional ordinary-share quote for upside comparison',{exact:true}).click();
+         await page.locator('[name="quote_price"]').fill('60');
+         await page.locator('[name="quote_date"]').fill('2025-12-31');
+         await page.locator('[name="quote_instrument"]').fill('Synthetic common share');
+         await page.locator('[name="quote_source"]').fill('Synthetic known-answer fixture, not market data');
+         await page.locator('[name="method_confirmed"]').check();
+         await page.getByRole('button',{name:'Calculate and save equity valuation',exact:true}).click();
+         await page.getByRole('heading',{name:'Synthetic '+method.toUpperCase()+' - not issuer data',exact:true}).waitFor();
+         const valId=new URL(page.url()).pathname.split('/').pop();
+         const val=await(await page.request.get(base+'/api/v1/valuations/'+valId)).json();
+         const expected=method==='pe'?'90.00':method==='pb'?'120.00':'100.00';
+         if(val.result.state!=='calculated'||val.result.scenarios.base.values.per_share.display!==expected)throw Error('Valuation mismatch '+method);
+         if(method==='pe'&&val.result.scenarios.base.values.ltv_contribution.display!=='16.67')throw Error('LTV mismatch');
+         await page.getByRole('button',{name:'Verify valuation reproducibility',exact:true}).click();
+         await page.getByRole('status').filter({hasText:'Valuation replay matched'}).waitFor();
+         if(method==='ddm'){
+           await page.screenshot({path:'design/previews/valuation-desktop.png',fullPage:true});
+           await page.setViewportSize({width:390,height:900});
+           await page.screenshot({path:'design/previews/valuation-mobile.png',fullPage:true});
+           if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Valuation page overflow');
+           await page.setViewportSize({width:1440,height:1000});
+         }
+       }
+     }
+     if(process.env.GS_QA_VALUATIONS==='1'){
+       await page.goto(base+'/company/'+receipt.company_id);
+       await page.getByRole('link',{name:'Open saved valuation (FCFE)',exact:true}).waitFor();
+     }
      await page.goto(base+'/templates/'+receipt.input.template.id);
    }
    await page.getByRole('button',{name:'Create private structure copy',exact:true}).click();
@@ -246,5 +296,5 @@ let browser;
  if((await page.request.get(base+'/api/v1/documents')).status()!==401)throw Error('Logout did not revoke access');
  const ready=await page.request.get(base+'/health/ready');
  if(ready.status()!==200||errors.length||external.length||overflow)throw Error(JSON.stringify({ready:ready.status(),errors,external,overflow}));
- console.log(JSON.stringify({ready:200,scenarios:['login','watchlist','public sources','shared draft','private upload','worker success','download','extraction','normalization','conflicts','review','input snapshot','stale snapshot','team','logout',...(process.env.GS_QA_AI==='1'?['local AI proposal','source-backed summary','AI mobile']:[]),...(process.env.GS_QA_PUBLIC==='1'?['SEC JPMorgan summary','SEC HSBC summary','SEC Nu summary']:[]),...(process.env.GS_QA_CALCULATIONS==='1'?['three calculation scenarios','replay verification','calculation mobile']:[]),...(process.env.GS_QA_TEMPLATES==='1'?['template upload','template sharing','template copy','template mobile']:[])],jsErrors:errors,externalRequests:external,mobileOverflow:overflow}));
+ console.log(JSON.stringify({ready:200,scenarios:['login','watchlist','public sources','shared draft','private upload','worker success','download','extraction','normalization','conflicts','review','input snapshot','stale snapshot','team','logout',...(process.env.GS_QA_AI==='1'?['local AI proposal','source-backed summary','AI mobile']:[]),...(process.env.GS_QA_PUBLIC==='1'?['SEC JPMorgan summary','SEC HSBC summary','SEC Nu summary']:[]),...(process.env.GS_QA_VALUATIONS==='1'?['P/E and user economics','P/B equity reconciliation','DDM sensitivity','FCFE valuation','valuation replay','valuation mobile']:[]),...(process.env.GS_QA_CALCULATIONS==='1'?['three calculation scenarios','replay verification','calculation mobile']:[]),...(process.env.GS_QA_TEMPLATES==='1'?['template upload','template sharing','template copy','template mobile']:[])],jsErrors:errors,externalRequests:external,mobileOverflow:overflow}));
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(async()=>{await browser?.close();});

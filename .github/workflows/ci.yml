@@ -25,4 +25,4 @@ jobs:
         run: docker compose exec -T worker python - < scripts/check_extraction.py
       - name: Stop containers without deleting persisted data
         if: always()
-        run: docker compose down
+        run: if test -f .env; then docker compose down; fi

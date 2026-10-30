@@ -84,6 +84,28 @@ def wrapped_lines(lines, width=850, size=18):
     return result
 
 
+def text_pages(lines, limit=16):
+    """Keep each short source/receipt paragraph on one slide, including wrapped hashes."""
+    page = []
+    for line in lines:
+        block = wrapped_lines([line])
+        if not block:
+            if page and page[-1]: page.append('')
+            continue
+        if len(block) <= limit:
+            if page and len(page) + len(block) > limit:
+                yield page; page = []
+            page += block
+            if len(page) < limit: page.append('')
+        else:
+            if page: yield page; page = []
+            for start in range(0, len(block), limit):
+                chunk = block[start:start + limit]
+                if len(chunk) == limit: yield chunk
+                else: page = chunk + ['']
+    if any(page): yield page
+
+
 def pptx_bytes(report):
     deck = Presentation(); deck.slide_width = 12192000; deck.slide_height = 6858000
     family = fonts()  # Use the same font metrics for wrapping and slide text.
@@ -121,8 +143,7 @@ def pptx_bytes(report):
     table('Scenario comparison (' + report['input']['currency'] + ')', summary_table(report))
     for name, rows in sensitivity_tables(report): table(name, rows)
     for title, lines in sections(report):
-        lines = wrapped_lines(lines)
-        for start in range(0, len(lines), 16):
-            s = slide(title + (' (continued)' if start else ''))
-            box(s, '\n'.join(lines[start:start + 16]).rstrip(), .55, 1.55, 12.2, 5.15)
+        for index, lines_on_page in enumerate(text_pages(lines)):
+            s = slide(title + (' (continued)' if index else ''))
+            box(s, '\n'.join(lines_on_page).rstrip(), .55, 1.55, 12.2, 5.15)
     stream = BytesIO(); deck.save(stream); return stream.getvalue()

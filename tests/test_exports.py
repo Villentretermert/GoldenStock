@@ -14,7 +14,7 @@ from test_workspace import workspace
 from test_valuations import source, api_payload, create, numbers
 from test_reviews import decide
 from goldenstock.models import ValuationRun
-from goldenstock.export_documents import wrapped_lines
+from goldenstock.export_documents import wrapped_lines, text_pages
 from goldenstock.export_workbook import expression
 from goldenstock.calculation_engine import parse_formula
 
@@ -26,6 +26,11 @@ def downloaded(client, rid, kind):
     assert hashlib.sha256(response.content).hexdigest() == response.headers['x-content-sha256']
     assert 'attachment;' in response.headers['content-disposition']
     return response.content
+
+
+def save_fixture(name, content):
+    folder = Path('.build-export-fixtures'); folder.mkdir(exist_ok=True)
+    (folder / name).write_bytes(content)
 
 
 def pdf_text(raw):
@@ -101,7 +106,7 @@ def test_export_source_formula_binding_and_text_injection(workspace):
     pdf=downloaded(a,rid,'pdf');slides=downloaded(a,rid,'pptx')
     assert 'Q'*100 in pdf_text(pdf).replace('\n','')
     assert 'Q'*100 in pptx_text(slides).replace('\n','')
-    Path('.build-export-fixtures/long-text.pptx').write_bytes(slides)
+    save_fixture('long-text.pptx', slides)
 
 
 def test_blocked_valuation_cannot_export_and_ui_downloads(workspace):
@@ -122,6 +127,9 @@ def test_excel_compiler_preserves_unary_power_and_long_source_text():
     assert expression(parse_formula(formula)[0], {'B1':'C8','B2':'C9','B3':'C10'})=='(((-C8)^C9)^C10)'
     original='X'*5000
     assert ''.join(wrapped_lines([original]))==original
+    receipt = 'Valuation result SHA-256: ' + 'abcdef0123456789'*4
+    pages = list(text_pages(['One', 'Two', receipt], limit=3))
+    assert any(receipt in ''.join(page) for page in pages)
 
 
 def test_three_scenarios_source_links_quote_and_invalid_sensitivity(workspace):
@@ -144,10 +152,10 @@ def test_three_scenarios_source_links_quote_and_invalid_sensitivity(workspace):
     for kind,extract in [('pdf',pdf_text),('pptx',pptx_text)]:
         content=extract(downloaded(a,rid,kind))
         assert all(str(v)+'.00' in content for v in (90,190,40))
-    Path('.build-export-fixtures/linked.xlsx').write_bytes(raw)
+    save_fixture('linked.xlsx', raw)
     dcf=api_payload(cid,'ddm');dcf['scenarios']['base']['cost_equity']['value']='0.005'
     rid=create(a,dcf,'invalid-sensitivity-export').json()['id']
     raw=downloaded(a,rid,'xlsx');book=openpyxl.load_workbook(BytesIO(raw),data_only=True)
     assert book['Sensitivity']['D8'].value=='Blocked'
     assert 'Blocked' in pdf_text(downloaded(a,rid,'pdf'))
-    Path('.build-export-fixtures/boundary.xlsx').write_bytes(raw)
+    save_fixture('boundary.xlsx', raw)

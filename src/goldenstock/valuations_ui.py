@@ -76,6 +76,10 @@ def mount_valuations_ui(app):
         body+='<div class="notice">'+('<strong>Source review changed. Create a new calculation and valuation.</strong><br>' if data['inputs_current'] is False else '')+'<br>'.join(e(w) for w in payload['warnings'])+'</div>'
         body+='<p><a href="/calculations/'+e(data['calculation_id'])+'">Open source calculation</a> · <a href="/valuations/new?calculation_id='+e(data['calculation_id'])+'">Evaluate another method</a></p>'
         body+=form('/api/v1/valuations/'+run_id+'/replay','Verify valuation reproducibility',next='/valuations/'+run_id+'?replayed=1')
+        if result['state'] != 'blocked':
+            body+='<section class="card"><h2>Download this valuation</h2><p>All files use this saved version. XLSX is an editable calculation; PDF and PPTX contain the saved results and source appendix.</p><p>'
+            body+=' · '.join(f'<a download href="/api/v1/valuations/{e(run_id)}/export/{kind}">Download {kind.upper()}</a>' for kind in ('xlsx','pdf','pptx'))
+            body+='</p><p>Source review status is checked at export. Files remain private until you share them.</p></section>'
         if request.query_params.get('replayed')=='1': body+='<p role="status">Valuation replay matched the saved result.</p>'
         body+='<div class="grid" style="margin-top:20px">'
         for name,scenario in result['scenarios'].items():

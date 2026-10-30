@@ -271,6 +271,17 @@ let browser;
          if(method==='pe'&&val.result.scenarios.base.values.ltv_contribution.display!=='16.67')throw Error('LTV mismatch');
          await page.getByRole('button',{name:'Verify valuation reproducibility',exact:true}).click();
          await page.getByRole('status').filter({hasText:'Valuation replay matched'}).waitFor();
+         if(process.env.GS_QA_EXPORTS==='1'&&['pe','ddm'].includes(method)){
+           await require('node:fs/promises').mkdir('.build-browser-exports',{recursive:true});
+           for(const kind of ['xlsx','pdf','pptx']){
+             const pending=page.waitForEvent('download');
+             await page.getByRole('link',{name:'Download '+kind.toUpperCase(),exact:true}).click();
+             const file=await pending;
+             if(await file.failure())throw Error('Export download failed '+kind);
+             if(file.suggestedFilename()!=='GoldenStock-'+valId+'.'+kind)throw Error('Unexpected export filename');
+             await file.saveAs('.build-browser-exports/'+method+'.'+kind);
+           }
+         }
          if(method==='ddm'){
            await page.screenshot({path:'design/previews/valuation-desktop.png',fullPage:true});
            await page.setViewportSize({width:390,height:900});
@@ -296,5 +307,5 @@ let browser;
  if((await page.request.get(base+'/api/v1/documents')).status()!==401)throw Error('Logout did not revoke access');
  const ready=await page.request.get(base+'/health/ready');
  if(ready.status()!==200||errors.length||external.length||overflow)throw Error(JSON.stringify({ready:ready.status(),errors,external,overflow}));
- console.log(JSON.stringify({ready:200,scenarios:['login','watchlist','public sources','shared draft','private upload','worker success','download','extraction','normalization','conflicts','review','input snapshot','stale snapshot','team','logout',...(process.env.GS_QA_AI==='1'?['local AI proposal','source-backed summary','AI mobile']:[]),...(process.env.GS_QA_PUBLIC==='1'?['SEC JPMorgan summary','SEC HSBC summary','SEC Nu summary']:[]),...(process.env.GS_QA_VALUATIONS==='1'?['P/E and user economics','P/B equity reconciliation','DDM sensitivity','FCFE valuation','valuation replay','valuation mobile']:[]),...(process.env.GS_QA_CALCULATIONS==='1'?['three calculation scenarios','replay verification','calculation mobile']:[]),...(process.env.GS_QA_TEMPLATES==='1'?['template upload','template sharing','template copy','template mobile']:[])],jsErrors:errors,externalRequests:external,mobileOverflow:overflow}));
+ console.log(JSON.stringify({ready:200,scenarios:['login','watchlist','public sources','shared draft','private upload','worker success','download','extraction','normalization','conflicts','review','input snapshot','stale snapshot','team','logout',...(process.env.GS_QA_AI==='1'?['local AI proposal','source-backed summary','AI mobile']:[]),...(process.env.GS_QA_PUBLIC==='1'?['SEC JPMorgan summary','SEC HSBC summary','SEC Nu summary']:[]),...(process.env.GS_QA_VALUATIONS==='1'?['P/E and user economics','P/B equity reconciliation','DDM sensitivity','FCFE valuation','valuation replay','valuation mobile']:[]),...(process.env.GS_QA_EXPORTS==='1'?['XLSX download','PDF download','PPTX download']:[]),...(process.env.GS_QA_CALCULATIONS==='1'?['three calculation scenarios','replay verification','calculation mobile']:[]),...(process.env.GS_QA_TEMPLATES==='1'?['template upload','template sharing','template copy','template mobile']:[])],jsErrors:errors,externalRequests:external,mobileOverflow:overflow}));
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(async()=>{await browser?.close();});

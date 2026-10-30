@@ -62,6 +62,7 @@ pypdfium2==5.14.0
 pytesseract==0.3.13
 openpyxl==3.1.5
 python-pptx==1.0.2
+reportlab==5.1.0
 pdfminer.six==20260107
 Pillow==13.0.0
 charset-normalizer==3.5.2

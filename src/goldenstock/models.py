@@ -202,6 +202,58 @@ class AIRun(Base):
     created: Mapped[float]=mapped_column(Float,default=time.time)
 
 
+class LabDataset(Base):
+    """Immutable reference labels and inputs; a revision creates a new row."""
+    __tablename__='lab_datasets'
+    __table_args__=(UniqueConstraint('owner_id','fingerprint'),)
+    id: Mapped[str]=mapped_column(String(32),primary_key=True,default=new_id)
+    org_id: Mapped[str]=mapped_column(ForeignKey('organizations.id'),index=True)
+    owner_id: Mapped[str]=mapped_column(ForeignKey('users.id'))
+    parent_id: Mapped[str | None]=mapped_column(ForeignKey('lab_datasets.id'),nullable=True)
+    revision: Mapped[int]=mapped_column(Integer,default=1)
+    title: Mapped[str]=mapped_column(String(160))
+    split: Mapped[str]=mapped_column(String(16))
+    kind: Mapped[str]=mapped_column(String(16))
+    fingerprint: Mapped[str]=mapped_column(String(64))
+    payload: Mapped[str]=mapped_column(Text)
+    created: Mapped[float]=mapped_column(Float,default=time.time)
+
+
+class LabSourceSplit(Base):
+    __tablename__='lab_source_splits'
+    owner_id: Mapped[str]=mapped_column(ForeignKey('users.id'),primary_key=True)
+    source_hash: Mapped[str]=mapped_column(String(64),primary_key=True)
+    split: Mapped[str]=mapped_column(String(16))
+
+
+class LabExperiment(Base):
+    __tablename__='lab_experiments'
+    __table_args__=(UniqueConstraint('owner_id','fingerprint'),)
+    id: Mapped[str]=mapped_column(String(32),primary_key=True,default=new_id)
+    org_id: Mapped[str]=mapped_column(ForeignKey('organizations.id'),index=True)
+    owner_id: Mapped[str]=mapped_column(ForeignKey('users.id'))
+    dataset_id: Mapped[str]=mapped_column(ForeignKey('lab_datasets.id'))
+    fingerprint: Mapped[str]=mapped_column(String(64))
+    manifest: Mapped[str]=mapped_column(Text)
+    manifest_hash: Mapped[str]=mapped_column(String(64))
+    revealed: Mapped[bool]=mapped_column(Boolean,default=False)
+    created: Mapped[float]=mapped_column(Float,default=time.time)
+
+
+class LabAnnotation(Base):
+    __tablename__='lab_annotations'
+    __table_args__=(UniqueConstraint('run_id','revision'),)
+    id: Mapped[str]=mapped_column(String(32),primary_key=True,default=new_id)
+    experiment_id: Mapped[str]=mapped_column(ForeignKey('lab_experiments.id'))
+    run_id: Mapped[str]=mapped_column(ForeignKey('ai_runs.id'))
+    actor_id: Mapped[str]=mapped_column(ForeignKey('users.id'))
+    revision: Mapped[int]=mapped_column(Integer)
+    verdict: Mapped[str]=mapped_column(String(16))
+    reason: Mapped[str]=mapped_column(String(1000))
+    output_hash: Mapped[str]=mapped_column(String(64))
+    created: Mapped[float]=mapped_column(Float,default=time.time)
+
+
 class PublicSnapshot(Base):
     __tablename__='public_snapshots'
     __table_args__=(UniqueConstraint('company_id','sha256'),)

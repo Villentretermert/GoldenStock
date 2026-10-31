@@ -118,6 +118,40 @@ def main():
                     assert process_ai(app.state.engine,settings,Provider()) is False
                     release.set();assert first.result()
                 assert len(calls)==1
+                # AI Lab uses the same scheduling lock and immutable reference rows.
+                from goldenstock.inference import inference_spec
+                lab_payload=dict(title='Synthetic PostgreSQL lab',kind='proposals',split='development',
+                    reference_confirmed=True,cases=[dict(job_id=receipt['job_id'],expected=[])])
+                with ThreadPoolExecutor(max_workers=3) as pool:
+                    lab_datasets=list(pool.map(lambda _:client.post('/api/v1/lab/datasets',json=lab_payload),range(3)))
+                assert all(r.status_code==201 for r in lab_datasets),[r.text for r in lab_datasets]
+                assert len({r.json()['id'] for r in lab_datasets})==1
+                lab_dataset=lab_datasets[0].json()['id']
+                with ThreadPoolExecutor(max_workers=3) as pool:
+                    lab_experiments=list(pool.map(lambda _:client.post('/api/v1/lab/experiments',json={'dataset_id':lab_dataset}),range(3)))
+                assert all(r.status_code==201 for r in lab_experiments),[r.text for r in lab_experiments]
+                assert len({r.json()['id'] for r in lab_experiments})==1
+                lab_id=lab_experiments[0].json()['id']
+                entered.clear();release.clear();calls.clear()
+                class LabProvider:
+                    def propose(self,evidence,profile):
+                        calls.append(1);entered.set();assert release.wait(10)
+                        return dict(inference_spec('proposals',profile),proposals=[],seconds=1,tokens=1)
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    first=pool.submit(process_ai,app.state.engine,settings,LabProvider())
+                    assert entered.wait(10)
+                    assert process_ai(app.state.engine,settings,LabProvider()) is False
+                    release.set();assert first.result()
+                assert len(calls)==1
+                assert process_ai(app.state.engine,settings,LabProvider())
+                lab=client.get('/api/v1/lab/experiments/'+lab_id).json()
+                for run in lab['runs']:
+                    url=f'/api/v1/lab/experiments/{lab_id}/runs/{run["id"]}/annotations'
+                    with ThreadPoolExecutor(max_workers=2) as pool:
+                        annotations=list(pool.map(lambda _:client.post(url,json=dict(revision=0,verdict='uncertain',reason='Synthetic concurrency check')),range(2)))
+                    assert sorted(r.status_code for r in annotations)==[201,409]
+                assert client.post('/api/v1/lab/experiments/'+lab_id+'/reveal').status_code==200
+                print('AI Lab PostgreSQL PASS: concurrent dataset/experiment deduplication, global GPU lease, annotation revision fencing and reveal.')
                 demo=client.get('/api/v1/templates/demo').content
                 def template_upload(key,template_id=''):
                     return client.post('/api/v1/templates',headers={'Idempotency-Key':key},

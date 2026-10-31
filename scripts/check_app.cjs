@@ -188,6 +188,60 @@ let browser;
    }
    await page.goto(base+'/review/sber');
  }
+ if(process.env.GS_QA_LAB==='1'){
+   for(const kind of ['proposals','summary']){
+     await page.goto(base+'/lab/new');
+     await page.getByLabel('Task',{exact:true}).selectOption(kind);
+     if(kind==='proposals')await page.getByLabel('Extracted original (metrics)',{exact:true}).selectOption(version.job_id);
+     else await page.getByLabel('Company (citations)',{exact:true}).selectOption('sber');
+     await page.getByRole('button',{name:'Load evidence',exact:true}).click();
+     await page.getByRole('heading',{name:'Source evidence',exact:true}).waitFor();
+     await page.getByLabel('Dataset title',{exact:true}).fill('Synthetic '+kind+' lab reference');
+     if(kind==='proposals'){
+       const ref=page.locator('fieldset').first();
+       await ref.getByLabel('Metric',{exact:true}).selectOption('profit');
+       await ref.getByLabel('Reported numeric token').fill('-120');
+       await ref.getByLabel('Verbatim quote including number').fill('Profit: -120 USD million. Footnote 1.');
+       await ref.getByLabel('Currency',{exact:true}).fill('USD');
+       await ref.getByLabel('Scale',{exact:true}).fill('million');
+     } else await page.getByLabel('Evidence 1 should appear in the summary',{exact:true}).check();
+     await page.getByLabel('I checked every reference',{exact:false}).check();
+     await page.getByRole('button',{name:'Save immutable reference',exact:true}).click();
+     await page.getByRole('button',{name:'Compare local models',exact:true}).waitFor();
+     await page.getByRole('button',{name:'Compare local models',exact:true}).click();
+     await page.getByRole('heading',{name:'Blind review',exact:true}).waitFor();
+     const id=new URL(page.url()).pathname.split('/').pop();let experiment;
+     for(let i=0;i<240;i++){
+       experiment=await(await page.request.get(base+'/api/v1/lab/experiments/'+id)).json();
+       if(experiment.runs.every(r=>['succeeded','failed','cancelled'].includes(r.state)))break;
+       await new Promise(r=>setTimeout(r,1000));
+     }
+     if(experiment.runs.some(r=>r.state!=='succeeded'))throw Error('Lab inference failed: '+JSON.stringify(experiment.runs.map(r=>({state:r.state,error:r.error}))));
+     if(JSON.stringify(experiment).includes('qwen'))throw Error('Blind API revealed model names');
+     await page.reload({waitUntil:'networkidle'});
+     if((await page.locator('main').innerText()).includes('qwen'))throw Error('Blind UI revealed model names');
+     await page.screenshot({path:'design/previews/lab-blind-'+kind+'.png',fullPage:true});
+     for(let i=0;i<2;i++){
+       const form=page.locator('form[data-api$="/annotations"]').nth(i);
+       await form.getByLabel('Judgement',{exact:true}).selectOption('uncertain');
+       await form.getByLabel('Reason',{exact:true}).fill('Synthetic automated UI check; independent human review still required.');
+       await form.getByRole('button',{name:'Save blind judgement',exact:true}).click();
+       await page.waitForLoadState('networkidle');
+       await page.locator('article.card').filter({hasText:'Variant '+(i+1)+' · Case 1'}).getByText('Review v1:',{exact:false}).waitFor();
+     }
+     await page.getByRole('button',{name:'Reveal models and scores',exact:true}).click();
+     await page.getByRole('heading',{name:'Model comparison',exact:true}).waitFor();
+     experiment=await(await page.request.get(base+'/api/v1/lab/experiments/'+id)).json();
+     if(experiment.comparison.length!==2||experiment.quality_target_confirmed)throw Error('Invalid comparison receipt');
+     console.log(JSON.stringify({lab:kind,comparison:experiment.comparison}));
+     await page.screenshot({path:'design/previews/lab-'+kind+'-desktop.png',fullPage:true});
+     await page.setViewportSize({width:390,height:900});
+     await page.screenshot({path:'design/previews/lab-'+kind+'-mobile.png',fullPage:true});
+     if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Lab mobile overflow');
+     await page.setViewportSize({width:1440,height:1000});
+   }
+   await page.goto(base+'/review/sber');
+ }
  await reviewFact(facts.find(f=>f.scale==='millions'),'unreviewed');
  await page.getByText('Stale — review changes',{exact:false}).waitFor();
  if(process.env.GS_QA_TEMPLATES==='1'){
@@ -300,6 +354,7 @@ let browser;
    await page.getByRole('button',{name:'Create private structure copy',exact:true}).click();
    await page.getByRole('link',{name:'Copy of Synthetic five-year template',exact:true}).waitFor();
  }
+ if(process.env.GS_QA_LAB==='1')console.log('AI Lab browser PASS: reference forms, two tasks / two local models, blind review, reveal, desktop/mobile.');
  await page.getByRole('link',{name:'Team',exact:true}).click();
  await page.getByRole('heading',{name:'Team accounts'}).waitFor();
  await page.getByRole('button',{name:'Sign out',exact:true}).click();

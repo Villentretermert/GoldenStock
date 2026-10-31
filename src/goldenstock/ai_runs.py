@@ -109,7 +109,7 @@ def proposals(data:ProposalRequest,request:Request):
 def runs(request:Request,company_id:str):
     actor=authenticate(request)
     with Session(request.app.state.engine) as db:
-        return [view(r) for r in db.scalars(select(AIRun).where(private(actor),AIRun.company_id==company_id).order_by(AIRun.created.desc()).limit(50))]
+        return [view(r) for r in db.scalars(select(AIRun).where(private(actor),~AIRun.kind.startswith('lab_'),AIRun.company_id==company_id).order_by(AIRun.created.desc()).limit(50))]
 
 
 @router.get('/runs/{run_id}')
@@ -117,7 +117,7 @@ def run(run_id:str,request:Request):
     actor=authenticate(request)
     with Session(request.app.state.engine) as db:
         row=db.scalar(select(AIRun).where(private(actor),AIRun.id==run_id))
-        if not row: raise HTTPException(404,'Run not found')
+        if not row or row.kind.startswith('lab_'): raise HTTPException(404,'Run not found')
         result=view(row)
         if row.kind=='summary':
             payload=json.loads(row.input)
@@ -135,7 +135,7 @@ def control(run_id:str,action:str,request:Request):
     with Session(request.app.state.engine) as db,db.begin():
         db.scalar(select(Company).where(Company.id=='sber').with_for_update())
         row=db.scalar(select(AIRun).where(private(actor),AIRun.id==run_id).with_for_update())
-        if not row: raise HTTPException(404,'Run not found')
+        if not row or row.kind.startswith('lab_'): raise HTTPException(404,'Run not found')
         if action=='cancel' and row.state in {'queued','running'}:
             row.state='cancelled' # Keep the lease until the provider returns; no overlapping GPU work.
         elif action=='retry' and row.state in {'failed','cancelled'} and row.lease_until<=time.time():
@@ -164,7 +164,14 @@ def process_ai(engine,settings,provider=None):
     output={};error=''
     try:
         adapter=provider or OllamaProvider(settings)
-        output=adapter.summarize(payload['evidence'],profile) if kind in {'summary','public_summary'} else adapter.propose(payload['evidence'],profile)
+        if kind.startswith('lab_'):
+            from goldenstock.ai_lab import validate_lab_input
+            validate_lab_input(payload,profile)
+        output=adapter.summarize(payload['evidence'],profile) if kind in {'summary','public_summary','lab_summary'} else adapter.propose(payload['evidence'],profile)
+        if kind.startswith('lab_'):
+            spec=payload['lab_spec']
+            if any(output.get(k)!=spec[k] for k in ('model','model_digest','prompt_version','prompt_sha256')):
+                raise InferenceError('experiment_receipt_mismatch')
     except InferenceError as exc: error=str(exc)
     except Exception: error='inference_failed'
     with Session(engine) as db,db.begin():

@@ -53,12 +53,17 @@ const checks=[];for(let n=0;n<3;n++){const prefix='check.'+n+'.';if(values[prefi
 body=JSON.stringify({title:values.title,company_id:values.company_id,template_id:values.template_id,version_id:values.version_id,snapshot_id:values.snapshot_id||null,scenarios,checks});
 if(form.dataset.payload!==body){form.dataset.requestKey=crypto.randomUUID();form.dataset.payload=body;}
 headers['Idempotency-Key']=form.dataset.requestKey;headers['Content-Type']='application/json';}
+else if(form.dataset.labDataset){const v=Object.fromEntries(fields);
+const expected=[];if(v.kind==='summary')expected.push(...fields.getAll('expected'));
+else for(let n=0;n<12;n++){const prefix='ref.'+n+'.';if(!v[prefix+'metric'])continue;const p={};
+for(const k of ['evidence_id','metric','number_text','quote','currency','scale','period','perimeter','definition'])p[k]=v[prefix+k]||null;expected.push(p);}
+body=JSON.stringify({title:v.title,kind:v.kind,split:v.split,parent_id:v.parent_id||null,reference_confirmed:fields.has('reference_confirmed'),cases:[{job_id:v.job_id||null,company_id:v.company_id||null,offset:Number(v.offset||0),expected}]});headers['Content-Type']='application/json';}
 else if(form.dataset.upload){body=fields;form.dataset.requestKey ||= crypto.randomUUID();headers['Idempotency-Key']=form.dataset.requestKey;}
 else{let values=Object.fromEntries(fields);for(const k of ['shared','active'])if(k in values)values[k]=values[k]==='true';
 if('revision' in values)values.revision=Number(values.revision);body=JSON.stringify(values);headers['Content-Type']='application/json';}
 const response=await fetch(form.dataset.api,{method:form.dataset.method||'POST',headers,body});const result=await response.json();
 if(!response.ok)throw new Error(typeof result.detail==='string'?result.detail:'Please check the entered values');
-location.href=form.dataset.valuation?'/valuations/'+result.id:form.dataset.calculation?'/calculations/'+result.id:(form.dataset.next||location.pathname+location.search);
+location.href=form.dataset.labDataset?'/lab/datasets/'+result.id:form.dataset.labExperiment?'/lab/experiments/'+result.id:form.dataset.valuation?'/valuations/'+result.id:form.dataset.calculation?'/calculations/'+result.id:(form.dataset.next||location.pathname+location.search);
 }catch(error){message.textContent=error.message;message.scrollIntoView({block:'center'});}finally{if(button)button.disabled=false;}
 }));
 '''
@@ -74,7 +79,7 @@ def hidden(name, value):
 
 def page(title, body, actor=None):
     nonce = secrets.token_urlsafe(20)
-    nav = '' if not actor else '<nav><a href="/">Watchlist</a><a href="/catalog">Companies</a><a href="/sources">Sources</a><a href="/models">Models</a><a href="/templates">Templates</a><a href="/calculations">Calculations</a><a href="/valuations">Valuations</a><a href="/files">Files & jobs</a>'+('<a href="/team">Team</a>' if actor.account_admin else '')+'</nav><span class="muted">'+e(actor.login)+'</span>'+form('/api/v1/auth/logout','Sign out',next='/login')
+    nav = '' if not actor else '<nav><a href="/">Watchlist</a><a href="/catalog">Companies</a><a href="/sources">Sources</a><a href="/models">Models</a><a href="/templates">Templates</a><a href="/calculations">Calculations</a><a href="/valuations">Valuations</a><a href="/lab">AI Lab</a><a href="/files">Files & jobs</a>'+('<a href="/team">Team</a>' if actor.account_admin else '')+'</nav><span class="muted">'+e(actor.login)+'</span>'+form('/api/v1/auth/logout','Sign out',next='/login')
     html = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="csrf" content="{e(actor.csrf if actor else '')}"><title>{e(title)} · GoldenStock</title><style>{CSS}</style></head>
     <body><header><a class="brand" href="/">GoldenStock</a>{nav}</header><main><div id="message" role="alert"></div>{body}</main><script nonce="{nonce}">{JS}</script></body></html>'''
@@ -99,6 +104,8 @@ def company_card(c):
 
 
 def mount_ui(app):
+    from goldenstock.ai_lab_ui import mount_lab_ui
+    mount_lab_ui(app)
     from goldenstock.valuations_ui import mount_valuations_ui
     mount_valuations_ui(app)
     from goldenstock.calculations_ui import mount_calculations_ui

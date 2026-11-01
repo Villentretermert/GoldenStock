@@ -266,6 +266,59 @@ class PublicSnapshot(Base):
     checked: Mapped[float]=mapped_column(Float,default=time.time)
 
 
+class MonitorSource(Base):
+    __tablename__='monitor_sources'
+    id: Mapped[str]=mapped_column(String(40),primary_key=True)
+    company_id: Mapped[str]=mapped_column(ForeignKey('companies.id'))
+    kind: Mapped[str]=mapped_column(String(16))
+    next_check: Mapped[float]=mapped_column(Float,default=0)
+    last_attempt: Mapped[float | None]=mapped_column(Float,nullable=True)
+    last_success: Mapped[float | None]=mapped_column(Float,nullable=True)
+    error: Mapped[str]=mapped_column(String(80),default='')
+    failures: Mapped[int]=mapped_column(Integer,default=0)
+    snapshot_id: Mapped[str | None]=mapped_column(String(32),nullable=True)
+
+
+class MonitorSnapshot(Base):
+    __tablename__='monitor_snapshots'
+    __table_args__=(UniqueConstraint('source_id','sha256'),)
+    id: Mapped[str]=mapped_column(String(32),primary_key=True,default=new_id)
+    source_id: Mapped[str]=mapped_column(ForeignKey('monitor_sources.id'))
+    sha256: Mapped[str]=mapped_column(String(64))
+    url: Mapped[str]=mapped_column(Text)
+    payload: Mapped[str]=mapped_column(Text)
+    created: Mapped[float]=mapped_column(Float,default=time.time)
+
+
+class MonitorObservation(Base):
+    __tablename__='monitor_observations'
+    source_id: Mapped[str]=mapped_column(ForeignKey('monitor_sources.id'),primary_key=True)
+    item_key: Mapped[str]=mapped_column(String(64),primary_key=True)
+    payload: Mapped[str]=mapped_column(Text)
+    snapshot_id: Mapped[str]=mapped_column(ForeignKey('monitor_snapshots.id'))
+
+
+class MonitorEvent(Base):
+    __tablename__='monitor_events'
+    __table_args__=(UniqueConstraint('source_id','fingerprint'),)
+    id: Mapped[str]=mapped_column(String(32),primary_key=True,default=new_id)
+    source_id: Mapped[str]=mapped_column(ForeignKey('monitor_sources.id'))
+    fingerprint: Mapped[str]=mapped_column(String(64))
+    kind: Mapped[str]=mapped_column(String(32))
+    payload: Mapped[str]=mapped_column(Text)
+    created: Mapped[float]=mapped_column(Float,default=time.time)
+
+
+class SiteNotification(Base):
+    __tablename__='site_notifications'
+    __table_args__=(UniqueConstraint('owner_id','event_id'),)
+    id: Mapped[str]=mapped_column(String(32),primary_key=True,default=new_id)
+    org_id: Mapped[str]=mapped_column(ForeignKey('organizations.id'),index=True)
+    owner_id: Mapped[str]=mapped_column(ForeignKey('users.id'))
+    event_id: Mapped[str]=mapped_column(ForeignKey('monitor_events.id'))
+    read_at: Mapped[float | None]=mapped_column(Float,nullable=True)
+
+
 class ModelTemplate(Base):
     __tablename__='model_templates'
     id: Mapped[str]=mapped_column(String(32),primary_key=True,default=new_id)

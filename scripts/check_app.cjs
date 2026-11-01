@@ -355,6 +355,32 @@ let browser;
    await page.getByRole('link',{name:'Copy of Synthetic five-year template',exact:true}).waitFor();
  }
  if(process.env.GS_QA_LAB==='1')console.log('AI Lab browser PASS: reference forms, two tasks / two local models, blind review, reveal, desktop/mobile.');
+ if(process.env.GS_QA_MONITOR==='1'){
+   const monitorStarted=Date.now()/1000;
+   await page.goto(base+'/updates');
+   await page.getByRole('heading',{name:'Reporting updates',exact:true}).waitFor();
+   for(const name of ['JPMorgan Chase & Co.','HSBC Holdings plc','Nu Holdings Ltd.']){
+     const card=page.locator('article.card').filter({has:page.getByRole('heading',{name,exact:true})});
+     await card.getByRole('button',{name:'Follow reporting',exact:true}).click();
+     await page.waitForLoadState('networkidle');
+   }
+   let status;
+   for(let attempt=0;attempt<150;attempt++){
+     status=await(await page.request.get(base+'/api/v1/monitoring')).json();
+     const sources=status.companies.filter(c=>['jpm','hsbc','nu'].includes(c.company_id)).flatMap(c=>c.sources);
+     if(sources.every(s=>s.last_attempt!==null)){
+       if(sources.some(s=>s.error&&s.last_attempt>=monitorStarted))throw Error('Live SEC monitoring: '+JSON.stringify(sources.map(s=>({id:s.id,error:s.error}))));
+       if(sources.every(s=>s.last_success!==null&&!s.error))break;
+     }
+     await new Promise(r=>setTimeout(r,1000));
+   }
+   const sources=status.companies.filter(c=>['jpm','hsbc','nu'].includes(c.company_id)).flatMap(c=>c.sources);
+   if(sources.length!==6||sources.some(s=>!s.last_success||s.error))throw Error('Live monitor baseline incomplete');
+   for(const s of sources){const source=await page.request.get(base+'/api/v1/monitor-snapshots/'+s.snapshot_id+'/download');if(source.status()!==200)throw Error('Source snapshot download failed');}
+   await page.reload({waitUntil:'networkidle'});
+   await page.screenshot({path:'design/previews/monitor-live.png',fullPage:true});
+   console.log(JSON.stringify({monitoring:'six live SEC sources passed',sources:sources.map(s=>({id:s.id,known_items:s.known_items}))}));
+ }
  await page.getByRole('link',{name:'Team',exact:true}).click();
  await page.getByRole('heading',{name:'Team accounts'}).waitFor();
  await page.getByRole('button',{name:'Sign out',exact:true}).click();

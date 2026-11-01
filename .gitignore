@@ -7,6 +7,7 @@ node_modules/
 .build*/
 .build-*.json
 .build-*.jsonl
+.build-*.html
 .chart-data*/
 design/previews/
 deliverables/*.pptx

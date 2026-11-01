@@ -21,6 +21,7 @@ from goldenstock.calculations import router as calculations_router
 from goldenstock.valuations import router as valuations_router
 from goldenstock.exports import router as exports_router
 from goldenstock.ai_lab import router as lab_router
+from goldenstock.monitoring import router as monitoring_router
 from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 from goldenstock.auth import hash_password
 import secrets
@@ -55,6 +56,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(valuations_router)
     app.include_router(exports_router)
     app.include_router(lab_router)
+    app.include_router(monitoring_router)
     app.add_middleware(RequestBodyLimitMiddleware,max_body_size=settings.max_file_bytes+65536)
 
     @app.middleware('http')
@@ -83,6 +85,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         state["company_valuation_enabled"] = True
         state["valuation_export_enabled"] = True
         state["ai_lab_enabled"] = True
+        state["reporting_monitor_enabled"] = True
         return state
 
     return app

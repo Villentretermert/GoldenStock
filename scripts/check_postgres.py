@@ -152,6 +152,30 @@ def main():
                     assert sorted(r.status_code for r in annotations)==[201,409]
                 assert client.post('/api/v1/lab/experiments/'+lab_id+'/reveal').status_code==200
                 print('AI Lab PostgreSQL PASS: concurrent dataset/experiment deduplication, global GPU lease, annotation revision fencing and reveal.')
+                from goldenstock.monitoring import process_monitor
+                from goldenstock.models import MonitorSource,MonitorEvent,SiteNotification
+                assert client.put('/api/v1/favorites/jpm').status_code==200
+                with Session(app.state.engine) as db,db.begin():
+                    for source in db.scalars(select(MonitorSource)): source.next_check=1e12
+                    db.get(MonitorSource,'jpm-facts').next_check=0
+                monitor_calls=[];monitor_value=[100]
+                def monitor_fetch(company,contact,kind):
+                    monitor_calls.append(1)
+                    payload={'cik':19617,'facts':{'us-gaap':{'Assets':{'units':{'USD':[dict(val=monitor_value[0],end='2025-12-31',filed='2026-02-01',accn='0000019617-26-000001',form='10-K')]}}}}}
+                    return 'https://data.sec.gov/synthetic',json.dumps(payload).encode(),payload
+                def monitor_once(_): return process_monitor(app.state.engine,settings,monitor_fetch,1800000000)
+                with ThreadPoolExecutor(max_workers=3) as pool: monitor_results=list(pool.map(monitor_once,range(3)))
+                assert monitor_results.count(True)==1 and len(monitor_calls)==1
+                assert client.get('/api/v1/notifications').json()['items']==[]
+                monitor_value[0]=110
+                with Session(app.state.engine) as db,db.begin(): db.get(MonitorSource,'jpm-facts').next_check=0
+                with ThreadPoolExecutor(max_workers=3) as pool: monitor_results=list(pool.map(monitor_once,range(3)))
+                assert monitor_results.count(True)==1 and len(monitor_calls)==2
+                feed=client.get('/api/v1/notifications').json()['items'];assert len(feed)==1 and feed[0]['kind']=='possible_revision'
+                with ThreadPoolExecutor(max_workers=3) as pool:
+                    read_results=list(pool.map(lambda _:client.post('/api/v1/notifications/'+feed[0]['id']+'/read'),range(3)))
+                assert all(r.status_code==200 for r in read_results) and len({r.json()['read_at'] for r in read_results})==1
+                print('Monitoring PostgreSQL PASS: one concurrent source request, atomic revision delivery, no duplicate notifications and idempotent private read state.')
                 demo=client.get('/api/v1/templates/demo').content
                 def template_upload(key,template_id=''):
                     return client.post('/api/v1/templates',headers={'Idempotency-Key':key},

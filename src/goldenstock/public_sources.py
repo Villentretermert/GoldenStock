@@ -19,11 +19,13 @@ TAGS=('ProfitLossAttributableToOwnersOfParent','NetIncomeLoss','Equity',
       'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest','Assets')
 
 
-def fetch(company,contact,transport=None):
+def fetch(company,contact,transport=None,kind='facts'):
     if company not in CIKS: raise HTTPException(409,'English SEC coverage is unavailable for this company')
+    if kind not in {'facts','submissions'}: raise HTTPException(422,'Unknown SEC endpoint')
     if not re.fullmatch(r'[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+',contact) or len(contact)>200:
         raise HTTPException(409,'Configure a real SEC contact email before public-source requests')
-    cik=CIKS[company];url=f'https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json'
+    cik=CIKS[company]
+    url=f'https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json' if kind=='facts' else f'https://data.sec.gov/submissions/CIK{cik:010d}.json'
     start=time.monotonic()
     try:
         with httpx.Client(timeout=15,trust_env=False,follow_redirects=False,transport=transport) as client:
@@ -35,7 +37,7 @@ def fetch(company,contact,transport=None):
                     if size>20*1024*1024 or time.monotonic()-start>30: raise HTTPException(502,'SEC response limit reached')
                     chunks.append(chunk)
         raw=b''.join(chunks);data=json.loads(raw)
-        if int(data['cik'])!=cik or not isinstance(data['facts'],dict): raise ValueError()
+        if int(data['cik'])!=cik or not isinstance(data['facts'] if kind=='facts' else data['filings']['recent'],dict): raise ValueError()
         return url,raw,data
     except (httpx.HTTPError,ValueError,KeyError,TypeError): raise HTTPException(502,'Invalid or unavailable SEC data') from None
     finally:

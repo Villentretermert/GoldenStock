@@ -1,0 +1,31 @@
+services:
+  backup:
+    profiles: [ops]
+    build: ./ops
+    image: goldenstock-ops:local
+    user: ${GS_BACKUP_RUN_AS:-0:0}
+    environment:
+      PGHOST: db
+      GS_BACKUP_REPOSITORY_ID: ${GS_BACKUP_REPOSITORY_ID:-}
+      PGUSER: goldenstock
+      PGDATABASE: goldenstock
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Run bootstrap first}
+    networks: [private]
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [DAC_OVERRIDE]
+    tmpfs:
+      - /scratch:size=1g,mode=1777
+      - /tmp:size=32m,mode=1777
+    volumes:
+      - app_data:/data:ro
+      - type: bind
+        source: ${GS_BACKUP_REPO:?Set a mounted backup repository directory}
+        target: /repository
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${GS_BACKUP_PASSWORD_FILE:?Set an operator-owned password file outside the repository}
+        target: /run/secrets/repository_password
+        read_only: true
+        bind: {create_host_path: false}

@@ -1,0 +1,57 @@
+name: goldenstock-rehearsal
+services:
+  recovery-db:
+    image: postgres:17.7
+    environment:
+      POSTGRES_USER: goldenstock
+      POSTGRES_DB: goldenstock_recovery
+      POSTGRES_PASSWORD: ${GS_RECOVERY_DB_PASSWORD:?Set a fresh recovery database password}
+    volumes: [recovery_db:/var/lib/postgresql/data]
+    networks: [quarantine]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "goldenstock", "-d", "goldenstock_recovery"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  restore:
+    image: goldenstock-ops:local
+    profiles: [ops]
+    environment:
+      PGHOST: recovery-db
+      GS_BACKUP_REPOSITORY_ID: ${GS_BACKUP_REPOSITORY_ID:-}
+      PGUSER: goldenstock
+      PGDATABASE: goldenstock_recovery
+      PGPASSWORD: ${GS_RECOVERY_DB_PASSWORD:?}
+    depends_on:
+      recovery-db: {condition: service_healthy}
+    networks: [quarantine]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [DAC_OVERRIDE, CHOWN, FOWNER]
+    read_only: true
+    tmpfs: ["/scratch:size=1g,mode=0700", "/tmp:size=32m,mode=1777"]
+    volumes:
+      - recovery_files:/data
+      - type: bind
+        source: ${GS_BACKUP_REPO:?}
+        target: /repository
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${GS_BACKUP_PASSWORD_FILE:?}
+        target: /run/secrets/repository_password
+        read_only: true
+        bind: {create_host_path: false}
+  recovered-web:
+    profiles: [inspect]
+    image: goldenstock:local
+    environment:
+      GS_DATABASE_URL: postgresql+psycopg://goldenstock:${GS_RECOVERY_DB_PASSWORD:?}@recovery-db/goldenstock_recovery
+      GS_DATA_DIR: /app/data
+    volumes: [recovery_files:/app/data]
+    networks: [quarantine]
+networks:
+  quarantine: {internal: true}
+volumes:
+  recovery_db:
+  recovery_files:

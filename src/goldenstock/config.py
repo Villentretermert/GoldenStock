@@ -3,7 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     heartbeat_interval: float = 5.0
     heartbeat_timeout: float = 30.0
     public_url: str = 'http://127.0.0.1:8081'
-    secure_cookie: bool = False  # Enable with TLS during GS-023.
+    secure_cookie: bool = False
     sec_contact: str = ''  # Deployment-only User-Agent contact, never browser input.
     max_file_bytes: int = 50 * 1024 * 1024
 
@@ -24,9 +24,15 @@ class Settings(BaseSettings):
     @classmethod
     def origin_only(cls, value):
         url = urlsplit(value)
-        if url.scheme not in {'http', 'https'} or not url.hostname or url.path not in {'', '/'} or url.query or url.fragment or url.username:
+        if url.scheme not in {'http', 'https'} or not url.hostname or url.path not in {'', '/'} or url.query or url.fragment or url.username is not None:
             raise ValueError('Expected a web origin')
         return value.rstrip('/')
+
+    @model_validator(mode='after')
+    def require_tls_cookie_pair(self):
+        if (urlsplit(self.public_url).scheme == 'https') != self.secure_cookie:
+            raise ValueError('HTTPS origins require Secure cookies, HTTP origins require local mode')
+        return self
 
     @field_validator("inference_url")
     @classmethod

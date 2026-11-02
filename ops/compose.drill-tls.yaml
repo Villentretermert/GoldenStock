@@ -1,0 +1,29 @@
+services:
+  recovered-web:
+    command: ["python", "-m", "uvicorn", "goldenstock.main:app", "--host", "0.0.0.0",
+              "--port", "8443", "--no-proxy-headers", "--ssl-keyfile", "/drill-tls/key.pem",
+              "--ssl-certfile", "/drill-tls/cert.pem"]
+    environment:
+      GS_PUBLIC_URL: https://recovered-web:8443
+      GS_SECURE_COOKIE: "true"
+      GS_DATABASE_URL: postgresql+psycopg://goldenstock_runtime:${GS_RUNTIME_PASSWORD:?}@recovery-db/goldenstock_recovery
+    volumes:
+      - ${GS_DRILL_TLS}:/drill-tls:ro
+  probe:
+    image: goldenstock:local
+    profiles: [inspect]
+    networks: [quarantine]
+    environment:
+      GS_QA_PASSWORD: ${GS_QA_PASSWORD:?}
+    volumes:
+      - ${GS_DRILL_TLS}/cert.pem:/drill-ca.pem:ro
+  drill-worker:
+    image: goldenstock:local
+    command: ["python", "-m", "goldenstock.worker"]
+    environment:
+      GS_DATABASE_URL: postgresql+psycopg://goldenstock_runtime:${GS_RUNTIME_PASSWORD:?}@recovery-db/goldenstock_recovery
+      GS_DATA_DIR: /app/data
+      GS_INFERENCE_URL: http://127.0.0.1:11434
+      GS_HEARTBEAT_INTERVAL: "1"
+    volumes: [recovery_files:/app/data]
+    networks: [quarantine]

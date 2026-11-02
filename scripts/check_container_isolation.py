@@ -21,7 +21,17 @@ def main():
                 raise RuntimeError('File worker must stay on the private network')
         if service=='monitor' and data['Mounts']:
             raise RuntimeError('Monitor must not mount uploaded files or host directories')
-    print('Container isolation PASS: no db/worker/monitor host ports, private file worker, monitor without data mounts.')
+    published = inspect('web')['HostConfig'].get('PortBindings') or {}
+    if set(published) != {'8080/tcp'} or not published['8080/tcp'] or any(
+            binding.get('HostIp') not in ('127.0.0.1','::1') for binding in published['8080/tcp']):
+        raise RuntimeError('Web backend must publish only its loopback port')
+    inference = subprocess.check_output(['docker','compose','--profile','ai','ps','-q','inference'],text=True).strip()
+    if inference:
+        data = json.loads(subprocess.check_output(['docker','inspect',inference],text=True))[0]
+        networks = list(data['NetworkSettings']['Networks'])
+        if any((data['HostConfig'].get('PortBindings') or {}).values()) or len(networks)!=1 or not networks[0].endswith('_private'):
+            raise RuntimeError('Inference must stay private')
+    print('Container isolation PASS: loopback web, private file worker and inference, no monitor data mounts or host ports.')
 
 
 if __name__=='__main__': main()

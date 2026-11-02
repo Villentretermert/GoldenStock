@@ -23,6 +23,10 @@ jobs:
         run: docker compose exec -T web python - < scripts/check_postgres.py
       - name: Local OCR and document extraction
         run: docker compose exec -T worker python - < scripts/check_extraction.py
+      - name: Encrypted backup, independent restore and 15 HTTPS sessions
+        run: |
+          docker build -t goldenstock-ops:local ops
+          python scripts/check_recovery.py
       - name: Stop containers without deleting persisted data
         if: always()
         run: if test -f .env; then docker compose down; fi

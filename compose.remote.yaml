@@ -1,0 +1,12 @@
+x-runtime-db: &runtime-db
+  GS_DATABASE_URL: postgresql+psycopg://goldenstock_runtime:${GS_RUNTIME_PASSWORD:?Provision the runtime role first}@db:5432/goldenstock
+services:
+  web:
+    environment:
+      <<: *runtime-db
+      GS_PUBLIC_URL: ${GS_REMOTE_ORIGIN:?Set the exact private HTTPS origin}
+      GS_SECURE_COOKIE: "true"
+  worker:
+    environment: *runtime-db
+  monitor:
+    environment: *runtime-db

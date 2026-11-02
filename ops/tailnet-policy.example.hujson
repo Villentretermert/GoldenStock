@@ -1,0 +1,17 @@
+// Merge into the fund's policy after replacing example identities.
+{
+  "groups": {
+    "group:goldenstock-analysts": ["analyst@example.invalid"],
+  },
+  "tagOwners": {
+    "tag:goldenstock": ["autogroup:admin"],
+  },
+  "grants": [
+    {"src":["group:goldenstock-analysts"], "dst":["tag:goldenstock"], "ip":["tcp:443"]},
+  ],
+  "tests": [
+    {"src":"analyst@example.invalid", "accept":["tag:goldenstock:443"],
+     "deny":["tag:goldenstock:22","tag:goldenstock:3389","tag:goldenstock:5432","tag:goldenstock:8081","tag:goldenstock:11434"]},
+    {"src":"outsider@example.invalid", "deny":["tag:goldenstock:443"]},
+  ],
+}

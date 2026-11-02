@@ -1,3 +1,5 @@
+2 ноября 2026. Защищённый профиль, отдельный носитель, настройка расписания Windows, обновление, откат и восстановление описаны в [PILOT_OPERATIONS.md](PILOT_OPERATIONS.md).
+
 2026-11-01: схема 0015, новый сервис monitor. Обновление: `docker compose up --build -d --wait web worker monitor`. Monitor имеет исходящую сеть без портов и app_data; worker/inference остаются приватными. Инструкция — MONITORING.md. Live browser: `$env:GS_QA_MONITOR="1"; .venv/Scripts/python.exe scripts/check_browser.py`.
 
 2026-10-31: актуальная схема 0014; доступен AI Lab по /lab, инструкция — AI_LAB.md. Для браузерной проверки реальных локальных моделей: `$env:GS_QA_LAB="1"; .venv/Scripts/python.exe scripts/check_browser.py`. Скрипт создаёт только синтетический QA-аккаунт и отключает его после проверки. Исторические числа тестов/ограничения реализации ниже заменены текущими CHANGELOG.md и README.md.

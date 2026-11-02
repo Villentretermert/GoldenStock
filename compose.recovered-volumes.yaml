@@ -1,0 +1,8 @@
+# Apply to a fresh project after the isolated restore, validation and DB rename.
+volumes:
+  postgres_data:
+    external: true
+    name: ${GS_RESTORED_DB_VOLUME:?Select the verified recovery DB volume}
+  app_data:
+    external: true
+    name: ${GS_RESTORED_FILES_VOLUME:?Select the matching recovery files volume}

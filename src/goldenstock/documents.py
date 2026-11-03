@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from starlette.datastructures import UploadFile
 from goldenstock.auth import authenticate, visible, owned, audit
-from goldenstock.models import Company, Document, DocumentVersion, Job, JobEvent, Extraction, new_id
+from goldenstock.models import Company, Document, DocumentVersion, Job, JobEvent, Extraction, ExtractionCheckpoint, new_id
 from goldenstock.storage import FileStore, validate_file
 
 router = APIRouter(prefix='/api/v1')
@@ -18,7 +18,16 @@ router = APIRouter(prefix='/api/v1')
 def receipt(db, version):
     job = db.scalar(select(Job).where(Job.version_id == version.id))
     return {'document_id':version.document_id,'version_id':version.id,'number':version.number,
-            'sha256':version.sha256,'job_id':job.id,'state':job.state,'kind':job.kind}
+            'sha256':version.sha256,'job_id':job.id,'state':job.state,'kind':job.kind,
+            'progress':pdf_progress(db,version.id)}
+
+
+def pdf_progress(db, version_id):
+    row=db.execute(select(ExtractionCheckpoint.completed_pages,ExtractionCheckpoint.total_pages)
+        .where(ExtractionCheckpoint.version_id==version_id)).first()
+    if row:
+        return dict(status='partial',completed_pages=row.completed_pages,total_pages=row.total_pages)
+    return None
 
 
 @router.post('/documents',status_code=201)
@@ -137,7 +146,8 @@ def job_status(job_id: str,request: Request):
         job=authorized_job(db,job_id,actor)
         history=[dict(state=event.state,attempt=event.attempt,created=event.created) for event in db.scalars(
             select(JobEvent).where(JobEvent.job_id==job.id).order_by(JobEvent.created))]
-        return dict(id=job.id,state=job.state,attempts=job.attempts,error_code=job.error_code,history=history,kind=job.kind)
+        return dict(id=job.id,state=job.state,attempts=job.attempts,error_code=job.error_code,history=history,kind=job.kind,
+                    progress=pdf_progress(db,job.version_id))
 
 
 @router.post('/jobs/{job_id}/extract')
@@ -182,9 +192,23 @@ def retry_job(job_id: str,request: Request):
         job=authorized_job(db,job_id,actor)
         if job.actor_id!=actor.id:
             raise HTTPException(404,'Job not found')
-        changed=db.execute(update(Job).where(Job.id==job.id,Job.state=='failed').values(state='queued',attempts=0,available_at=0,error_code=''))
+        changed=db.execute(update(Job).where(Job.id==job.id,Job.state.in_(['failed','cancelled'])).values(state='queued',attempts=0,available_at=0,error_code='',lease_token='',lease_until=0))
         if not changed.rowcount:
-            raise HTTPException(409,'Only failed jobs can be retried')
+            raise HTTPException(409,'Only failed or cancelled jobs can be retried')
         db.add(JobEvent(job_id=job.id,state='manual_retry',attempt=0))
         audit(db,actor,'job.retry',job.id)
+    return {'ok':True}
+
+
+@router.post('/jobs/{job_id}/cancel')
+def cancel_job(job_id: str,request: Request):
+    actor=authenticate(request,True)
+    with Session(request.app.state.engine) as db,db.begin():
+        job=authorized_job(db,job_id,actor)
+        changed=db.execute(update(Job).where(Job.id==job.id,Job.kind=='extract_document',
+            Job.state.in_(['queued','retry','running'])).values(state='cancelled',lease_token='',lease_until=0))
+        if not changed.rowcount:
+            raise HTTPException(409,'Only active extraction jobs can be cancelled')
+        db.add(JobEvent(job_id=job.id,state='cancelled',attempt=job.attempts))
+        audit(db,actor,'job.cancel',job.id)
     return {'ok':True}

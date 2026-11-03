@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from goldenstock.api import create_app
 from goldenstock.auth import hash_password
-from goldenstock.models import Extraction, Organization, User
+from goldenstock.models import Extraction, Organization, User, ExtractionCheckpoint, Job
 
 app = create_app()
 password = os.environ["GS_QA_PASSWORD"]
@@ -51,6 +51,31 @@ with TestClient(app) as client:
     template.raise_for_status()
     knowledge = client.get("/api/v1/knowledge/jpm/export").json()
     assert len(knowledge["facts"]) == 1
+    # A cancelled long-PDF prefix must survive backup and resume on the clean server.
+    import io
+    from reportlab.pdfgen import canvas
+    from goldenstock import jobs
+    from goldenstock.extraction import PDF_PARSER_VERSION
+    buffer=io.BytesIO(); document=canvas.Canvas(buffer)
+    for number in range(1,27):
+        document.drawString(50,750,f'Synthetic recovery page {number}'); document.showPage()
+    document.save()
+    pending=client.post('/api/v1/documents',data=dict(company_id='jpm'),
+        headers={'Idempotency-Key':'gs025-recovery-prefix'},
+        files={'file':('pending.pdf',buffer.getvalue(),'application/pdf')})
+    pending.raise_for_status(); pending=pending.json()
+    from goldenstock.extraction import extract_pdf_chunk
+    from goldenstock.storage import FileStore
+    from goldenstock.models import DocumentVersion
+    with Session(app.state.engine) as db,db.begin():
+        version=db.get(DocumentVersion,pending['version_id'])
+        prefix=extract_pdf_chunk(FileStore(app.state.settings.data_dir).path(version.blob_key),1,25)
+        encoded=json.dumps(prefix)
+        job=db.get(Job,pending['job_id']); job.kind='extract_document'; job.state='cancelled'
+        db.add(ExtractionCheckpoint(version_id=version.id,parser_version=PDF_PARSER_VERSION,
+            source_sha256=version.sha256,completed_pages=25,total_pages=26,payload=encoded,
+            payload_sha256=hashlib.sha256(encoded.encode()).hexdigest()))
     print(json.dumps(dict(document=original, template=template.json(), knowledge_hash=knowledge["state_hash"],
+                          pending_document=pending,
                           template_sha=hashlib.sha256(demo.content).hexdigest(),
                           old_session=client.cookies.get("gs_session"))))

@@ -61,6 +61,20 @@ try:
     assert hashlib.sha256(admin.get(path).content).hexdigest() == receipt["template_sha"]
     knowledge = admin.get("/api/v1/knowledge/jpm/export").json()
     assert len(knowledge["facts"]) == 1 and knowledge["state_hash"] == receipt["knowledge_hash"]
+    pending=receipt['pending_document']
+    pending_url='/api/v1/jobs/'+pending['job_id']
+    assert admin.get(pending_url).json()['progress']==dict(status='partial',completed_pages=25,total_pages=26)
+    assert admin.get(pending_url+'/extraction').status_code==409
+    assert sessions[1][0].get(pending_url).status_code==404
+    admin.post(pending_url+'/retry').raise_for_status()
+    for _ in range(40):
+        status=admin.get(pending_url).json()
+        if status['state']=='succeeded': break
+        if status['state']=='failed': raise RuntimeError('Restored prefix could not resume: '+status['error_code'])
+        time.sleep(1)
+    result=admin.get(pending_url+'/extraction'); result.raise_for_status()
+    assert result.json()['source_sha256']==pending['sha256']
+    assert [i['location']['page'] for i in result.json()['items']]==list(range(1,27))
     assert admin.put("/api/v1/favorites/jpm", headers={"Origin":"https://untrusted.invalid"}).status_code == 403
     employee = sessions[-1][0].get("/api/v1/auth/me").json()["id"]
     admin.patch("/api/v1/users/"+employee, json={"active":False}).raise_for_status()
@@ -79,7 +93,7 @@ try:
     timings = sorted(item[1] for item in sessions)
     print(json.dumps(dict(concurrent_accounts=len(sessions), scenario="HTTPS login, session and catalog",
                           p50_ms=round(timings[7]), p95_ms=round(timings[math.ceil(.95*15)-1]),
-                          original=True, template=True, reviewed_knowledge=True, revoked_session_denied=True,
+                          original=True, template=True, reviewed_knowledge=True, pdf_checkpoint_resumed=True, revoked_session_denied=True,
                           old_session_denied=True, inference_outage_isolated=True)))
 finally:
     for session, _ in sessions:

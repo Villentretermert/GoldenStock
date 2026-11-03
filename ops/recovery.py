@@ -19,7 +19,7 @@ DATA = Path("/data")
 SCRATCH = Path("/scratch")
 REPO = Path("/repository")
 TRANSIENT = {"login_sessions", "worker_heartbeats"}
-SUPPORTED_REVISION = "0015"
+SUPPORTED_REVISION = "0016"
 REFERENCES = """
  SELECT blob_key, sha256 FROM document_versions
  UNION ALL SELECT blob_key, sha256 FROM template_versions

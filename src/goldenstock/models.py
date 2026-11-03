@@ -143,6 +143,18 @@ class Extraction(Base):
     created: Mapped[float] = mapped_column(Float, default=time.time)
 
 
+class ExtractionCheckpoint(Base):
+    """Incomplete raw evidence is never exposed as an Extraction."""
+    __tablename__ = 'extraction_checkpoints'
+    version_id: Mapped[str] = mapped_column(ForeignKey('document_versions.id'), primary_key=True)
+    parser_version: Mapped[str] = mapped_column(String(40))
+    source_sha256: Mapped[str] = mapped_column(String(64))
+    completed_pages: Mapped[int] = mapped_column(Integer)
+    total_pages: Mapped[int] = mapped_column(Integer)
+    payload: Mapped[str] = mapped_column(Text)
+    payload_sha256: Mapped[str] = mapped_column(String(64))
+
+
 class Fact(Base):
     __tablename__='facts'
     __table_args__=(UniqueConstraint('owner_id','fingerprint'),)

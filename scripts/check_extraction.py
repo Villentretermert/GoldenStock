@@ -19,6 +19,22 @@ with tempfile.TemporaryDirectory() as directory:
     assert 'Profit' in words and '-120' in words and 'million' in words, words
     assert all(item['method']=='ocr' and item['location']['page']==1 for item in result['items'])
     assert all(0<=item['confidence']<=1 for item in result['items'])
+    # The scan sits in the second chunk; blank pages still count as processed.
+    import pypdfium2 as pdfium
+    with pdfium.PdfDocument.new() as combined, pdfium.PdfDocument(scan) as source:
+        for _ in range(25):
+            page=combined.new_page(300,100); page.close()
+        combined.import_pages(source)
+        combined.save(root/'chunk-scan.pdf')
+    prefixes=[]
+    result=run_parser(root/'chunk-scan.pdf','.pdf',lambda:True,save_checkpoint=lambda p:prefixes.append(p))
+    assert [p['coverage']['last_page'] for p in prefixes]==[25,26]
+    assert result['coverage']['total_pages']==26 and result['coverage']['status']=='complete'
+    assert all(item['location']['page']==26 for item in result['items'])
+    assert 'Profit' in ' '.join(i['text'] for i in result['items'])
+    assert 'pages_without_extractable_content' in result['warnings']
+    replay=run_parser(root/'chunk-scan.pdf','.pdf',lambda:True,checkpoint=prefixes[0])
+    assert replay==result
     book=Workbook(); book.active.append(['Profit',-120]); book.active.merge_cells('A2:B2')
     xlsx=root/'sample.xlsx'; book.save(xlsx)
     result=run_parser(xlsx,'.xlsx',lambda:True)
@@ -35,4 +51,4 @@ with tempfile.TemporaryDirectory() as directory:
         raise AssertionError('Timeout was not enforced')
     except ExtractionError as exc:
         assert str(exc)=='extraction_timeout'
-print('PASS: real local OCR, XLSX merged cells, PPTX cells, bounded Linux subprocess and timeout. Synthetic corpus only.')
+print('PASS: local OCR across chunk boundaries, blank page coverage and resume, XLSX/PPTX, bounded subprocess and timeout. Synthetic corpus only.')

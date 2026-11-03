@@ -40,6 +40,9 @@ def main():
     password=secrets.token_urlsafe(32)
     subprocess.run(DOCKER+[SEED],input=json.dumps(dict(login=login,password=password)),text=True,check=True)
     try:
+        if os.environ.get('GS_QA_PDF_CHUNKS')=='1':
+            subprocess.run(DOCKER+[Path('scripts/browser_pdf_fixture.py').read_text()],
+                input=json.dumps(dict(login=login,password=password)),text=True,check=True)
         runtime=Path.home()/'.cache/codex-runtimes/codex-primary-runtime/dependencies/node'
         env=dict(os.environ,GS_QA_LOGIN=login,GS_QA_PASSWORD=password,GS_NODE_MODULES=str(runtime/'node_modules'),GS_APP_URL='http://127.0.0.1:8081')
         from extraction_fixtures import simple_pdf

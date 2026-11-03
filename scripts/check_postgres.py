@@ -21,6 +21,55 @@ from goldenstock.api import create_app
 from goldenstock.jobs import claim,execute
 
 
+def check_pdf_resume(app, client):
+    import io
+    import threading
+    from unittest.mock import patch
+    from reportlab.pdfgen import canvas
+    from goldenstock import jobs
+    from goldenstock.models import ExtractionCheckpoint
+    stream=io.BytesIO(); pdf=canvas.Canvas(stream)
+    for number in range(1,27):
+        pdf.drawString(50,750,f'Original synthetic page {number}'); pdf.showPage()
+    pdf.save()
+    response=client.post('/api/v1/documents',data={'company_id':'jpm'},
+        headers={'Idempotency-Key':'pg-pdf-checkpoint'},files={'file':('annual.pdf',stream.getvalue())})
+    response.raise_for_status(); receipt=response.json()
+    jobs.process_one(app.state.engine,app.state.settings)
+    url='/api/v1/jobs/'+receipt['job_id']
+    client.post(url+'/extract').raise_for_status()
+    leased=claim(app.state.engine)
+    saved=threading.Event(); release=threading.Event()
+    save=jobs.save_pdf_checkpoint
+    def paused(*args):
+        save(*args); saved.set(); assert release.wait(15)
+    with patch.object(jobs,'save_pdf_checkpoint',paused), ThreadPoolExecutor(max_workers=1) as pool:
+        executing=pool.submit(execute,app.state.engine,app.state.settings,leased)
+        try:
+            assert saved.wait(30)
+            assert client.get(url).json()['progress']['completed_pages']==25
+            client.post(url+'/cancel').raise_for_status()
+        finally:
+            release.set()
+        executing.result()
+    assert client.get(url).json()['state']=='cancelled'
+    assert client.get(url+'/extraction').status_code==409
+    with Session(app.state.engine) as db:
+        prefix=json.loads(db.get(ExtractionCheckpoint,receipt['version_id']).payload)
+    from goldenstock.extraction import ExtractionError
+    try:
+        save(app.state.engine,*leased,receipt['sha256'],prefix)
+        raise AssertionError('Cancelled worker overwrote checkpoint')
+    except ExtractionError as exc:
+        assert str(exc)=='lease_or_access_lost'
+    client.post(url+'/retry').raise_for_status()
+    jobs.process_one(app.state.engine,app.state.settings)
+    result=client.get(url+'/extraction'); result.raise_for_status()
+    assert result.json()['source_sha256']==receipt['sha256']
+    assert [i['location']['page'] for i in result.json()['items']]==list(range(1,27))
+    print('PDF PostgreSQL PASS: checkpoint survives concurrent cancellation, stale write fenced, resume preserves 26 original pages.')
+
+
 def main():
     original=get_settings()
     operator=make_engine(original)
@@ -305,6 +354,7 @@ def main():
                 print('Calculation PostgreSQL PASS: idempotency, replay, review fencing and stale input rejection.')
                 print('Template PostgreSQL PASS: idempotent upload and unique concurrent version numbers.')
                 print('PostgreSQL integration PASS: migrations, concurrent upload/fact/review/snapshot/AI deduplication, single GPU task, single successor, crash recovery and stale-worker fencing.')
+                check_pdf_resume(app,client)
     finally:
         if app:
             app.state.engine.dispose()

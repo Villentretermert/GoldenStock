@@ -6,6 +6,10 @@ PARSER_VERSION = 'gs010-v1'
 MAX_ITEMS = 50000
 MAX_BYTES = 8 * 1024 * 1024
 MAX_PAGES = 250
+PDF_PARSER_VERSION = 'gs025-pdf-v1'
+PDF_CHUNK_PAGES = 25
+MAX_PDF_PAGES = 1000
+MAX_PDF_BYTES = 16 * 1024 * 1024
 
 
 class ExtractionError(Exception):
@@ -85,14 +89,24 @@ def extract_pptx(path, result):
             shapes(slide.shapes, i)
 
 
-def extract_pdf(path, result):
+def extract_pdf(path, result, first_page=1, page_count=None):
     import pdfplumber
     import pypdfium2 as pdfium
     import pytesseract
-    with pdfplumber.open(path) as pdf:
-        if len(pdf.pages) > MAX_PAGES:
-            raise ExtractionError('extraction_limit')
-        for i, page in enumerate(pdf.pages, 1):
+    with pdfium.PdfDocument(path) as document:
+        total = len(document)
+    if not 1 <= total <= MAX_PDF_PAGES:
+        raise ExtractionError('extraction_limit')
+    if not 1 <= first_page <= total:
+        raise ExtractionError('invalid_page_range')
+    last_page = min(total, first_page + page_count - 1) if page_count else total
+    # Select original page numbers; never split or rewrite the source PDF.
+    with pdfplumber.open(path, pages=list(range(first_page, last_page + 1))) as pdf:
+        if len(pdf.pages) != last_page - first_page + 1:
+            raise ExtractionError('incomplete_page_range')
+        for page in pdf.pages:
+            i = page.page_number
+            before = len(result.items)
             text = page.extract_text() or ''
             if text.strip():
                 result.add('text', text, dict(page=i))
@@ -124,6 +138,18 @@ def extract_pdf(path, result):
                             line=data['line_num'][n], word=data['word_num'][n]),
                             method='ocr', confidence=max(0, float(data['conf'][n])) / 100)
             page.close()
+            if len(result.items) == before:
+                result.warnings.add('pages_without_extractable_content')
+    return dict(first_page=first_page, last_page=last_page, total_pages=total,
+                status='complete' if first_page == 1 and last_page == total else 'partial')
+
+
+def extract_pdf_chunk(path, first_page, page_count):
+    if not 1 <= page_count <= PDF_CHUNK_PAGES:
+        raise ExtractionError('invalid_page_range')
+    result = Result()
+    coverage = extract_pdf(path, result, first_page, page_count)
+    return dict(result.output(), parser_version=PDF_PARSER_VERSION, coverage=coverage)
 
 
 def extract(path, extension):
@@ -131,10 +157,13 @@ def extract(path, extension):
     parsers = {'.pdf': extract_pdf, '.xlsx': extract_xlsx, '.pptx': extract_pptx}
     if extension not in parsers:
         raise ExtractionError('unsupported_format')
-    parsers[extension](path, result)
+    coverage = parsers[extension](path, result)
     if not result.items:
         raise ExtractionError('no_extractable_content')
-    return result.output()
+    output = result.output()
+    if extension == '.pdf':
+        output.update(parser_version=PDF_PARSER_VERSION, coverage=coverage)
+    return output
 
 
 def main():
@@ -146,7 +175,10 @@ def main():
         resource.setrlimit(resource.RLIMIT_CPU, (180, 180))
         resource.setrlimit(resource.RLIMIT_FSIZE, (MAX_BYTES, MAX_BYTES))
     try:
-        payload = extract(sys.argv[1], sys.argv[2])
+        if sys.argv[2] == '.pdf' and len(sys.argv) == 5:
+            payload = extract_pdf_chunk(sys.argv[1], int(sys.argv[3]), int(sys.argv[4]))
+        else:
+            payload = extract(sys.argv[1], sys.argv[2])
     except ExtractionError as exc:
         payload = {'error': str(exc)}
     except Exception:

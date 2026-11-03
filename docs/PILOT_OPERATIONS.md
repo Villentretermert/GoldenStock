@@ -111,6 +111,8 @@ candidate exec -T web python - < scripts/pilot_status.py
 
 ## Учебное испытание
 
+4 ноября 2026: актуальная схема — `0016`. Повторная репетиция также проверяет сохранение незавершённого PDF и продолжение с 26-й страницы после восстановления: 33 таблицы и 4 исходных/шаблонных файла. Подробности и совместимость старых копий — [LONG_PDF.md](LONG_PDF.md).
+
 ```sh
 docker compose build web
 docker build -t goldenstock-ops:local ops

@@ -51,14 +51,14 @@ def main():
             env["GS_BACKUP_REPOSITORY_ID"] = json.loads(initialized.stdout.strip().splitlines()[-1])["repository_id"]
             result = run(source,"run","--rm","--no-deps","-T","backup","backup",capture=True)
             saved = json.loads(result.stdout.strip().splitlines()[-1])
-            assert saved["verified_blobs"] == 3
+            assert saved["verified_blobs"] == 4
             print(json.dumps(saved), flush=True)
             run(source,"run","--rm","--no-deps","-T","backup","status")
             run(source,"run","--rm","--no-deps","-T","backup","check")
             # Simulate damaged source media after the good snapshot. Never publish the bad backup.
             damage = """from pathlib import Path
 files = [p for p in Path('/app/data/originals').rglob('*') if p.is_file()]
-assert len(files) == 3
+assert len(files) == 4
 files[0].write_bytes(b'synthetic damage')
 """
             run(source,"run","--rm","--no-deps","-T","web","python","-c",damage)

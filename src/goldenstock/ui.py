@@ -134,6 +134,8 @@ def mount_ui(app):
         body='<h1>Extracted evidence</h1><div class="notice">Unreviewed. Check the original before using these values. OCR confidence measures recognition, not financial accuracy. English language requires analyst confirmation.</div>'
         original=f'/api/v1/documents/{result["document_id"]}/versions/{result["version_id"]}/download'
         body+=f'<p><a href="{e(original)}">{e(result["filename"])}</a> · Version {result["version_number"]} · {result["total"]} items</p><p>Warnings: {e(", ".join(result["warnings"]).replace("_", " ") or "None reported")}</p>'
+        if result.get('coverage'):
+            body+=f'<p>Complete PDF: {result["coverage"]["total_pages"]} original pages processed. Page numbers below refer to the original file.</p>'
         body+='<div class="table-wrap"><table><thead><tr><th>Origin</th><th>Raw value</th><th>Method / confidence</th></tr></thead><tbody>'
         for item_index,item in enumerate(result['items'],offset):
             value='[empty]' if item['text'] is None else item['text']
@@ -179,7 +181,12 @@ def mount_ui(app):
             for version in doc['versions']:
                 url=f'/api/v1/documents/{doc["id"]}/versions/{version["version_id"]}/download'
                 body += f'<p>Version {version["number"]} · {e(version["state"])} · {version["size"]} bytes<br><small>SHA-256: {e(version["sha256"])}</small></p><div class="row"><a href="{url}">Download original</a><a href="/api/v1/jobs/{version["job_id"]}">Job history</a>'
-                if version['state']=='failed':
+                if version.get('progress'):
+                    progress=version['progress']
+                    body+=f'<p>Incomplete extraction: {progress["completed_pages"]} / {progress["total_pages"]} pages saved. Evidence becomes available after the entire PDF is processed. Retry resumes saved progress.</p>'
+                if version['kind']=='extract_document' and version['state'] in {'queued','retry','running'}:
+                    body+=form('/api/v1/jobs/'+version['job_id']+'/cancel','Cancel extraction')
+                if version['state'] in {'failed','cancelled'}:
                     body += form('/api/v1/jobs/'+version['job_id']+'/retry','Retry processing')
                 if version['state']=='succeeded' and version['kind']=='verify_original':
                     body += form('/api/v1/jobs/'+version['job_id']+'/extract','Extract English document')

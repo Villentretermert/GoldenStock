@@ -1,0 +1,62 @@
+{
+  "schema": "gs004-development-sources-v1",
+  "created_on": "2026-11-04",
+  "development_only": true,
+  "reviewed_gold_facts": 0,
+  "quality_target_achieved": false,
+  "split_scope": "Whole 2025 annual-report families, sections and revisions; excluded from blind holdout.",
+  "split_enforcement": "Preparation manifest only; AI Lab datasets not yet created.",
+  "measurement_scope": "Raw CPU/OCR parser only, no manual review, AI inference, calculation or export.",
+  "sources": [
+    {
+      "url": "https://www.jpmorganchase.com/content/dam/jpmc/jpmorgan-chase-and-co/investor-relations/documents/annualreport-2025.pdf",
+      "bytes": 4928865,
+      "sha256": "2a3ee9733eafd01e7667c5540fbd797c4cc688d14f00638a877f5623d1316d9d",
+      "retrieved_on": "2026-11-03",
+      "company_id": "jpm",
+      "split": "development",
+      "review_status": "unreviewed",
+      "filename": "jpmorgan-annual-report-2025.pdf",
+      "document_family": "jpm-2025-annual-report",
+      "pages": 364,
+      "items": 16580,
+      "parser_version": "gs025-pdf-v1",
+      "extraction_sha256": "d2d5e1ca5a265c198cf439e4af14c8e05f7be68dc00352d81e9d0ba278ff1dc2",
+      "parser_seconds": 127.46,
+      "peak_child_rss_kib": 116820,
+      "human_reviewed_facts": 0,
+      "locators": [
+        {
+          "topic": "income",
+          "pdf_page": 197,
+          "printed_page": 165,
+          "item_index": 14151
+        },
+        {
+          "topic": "balance",
+          "pdf_page": 199,
+          "printed_page": 167,
+          "item_index": 14153
+        }
+      ]
+    },
+    {
+      "url": "https://www.hsbc.com/-/files/hsbc/investors/hsbc-results/2025/annual/pdfs/hsbc-holdings-plc/260225-annual-report-and-accounts-2025.pdf?download=1",
+      "bytes": 10110145,
+      "sha256": "94aab2f5c83d1060ee95d344f1915833869fe4502dc635e4ab9ca84f496ee94b",
+      "retrieved_on": "2026-11-03",
+      "company_id": "hsbc",
+      "split": "development",
+      "review_status": "unreviewed",
+      "filename": "hsbc-annual-report-2025.pdf",
+      "document_family": "hsbc-2025-annual-report",
+      "pages": 372,
+      "items": 44512,
+      "parser_version": "gs025-pdf-v1",
+      "extraction_sha256": "907db3b76006532e5588a783a642ee22b005cc5a040503077918401084ff12c3",
+      "parser_seconds": 292.6,
+      "peak_child_rss_kib": 139396,
+      "human_reviewed_facts": 0
+    }
+  ]
+}

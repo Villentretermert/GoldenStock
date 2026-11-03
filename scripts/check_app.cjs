@@ -23,6 +23,28 @@ let browser;
  await page.getByLabel('Password',{exact:true}).fill(process.env.GS_QA_PASSWORD);
  await page.getByRole('button',{name:'Sign in',exact:true}).click();
  await page.getByRole('heading',{name:'Your watchlist',exact:true}).waitFor();
+ if(process.env.GS_QA_PDF_CHUNKS==='1'){
+   await page.goto(base+'/files');
+   const card=page.locator('div.card').filter({has:page.getByRole('heading',{name:'synthetic-pdf-progress.pdf',exact:true})});
+   await card.getByText('Incomplete extraction: 25 / 26',{exact:false}).waitFor();
+   if(await card.getByRole('link',{name:'View extracted evidence'}).count())throw Error('Partial evidence exposed');
+   await page.screenshot({path:'design/previews/pdf-progress-desktop.png',fullPage:true});
+   await page.setViewportSize({width:390,height:900});
+   await page.screenshot({path:'design/previews/pdf-progress-mobile.png',fullPage:true});
+   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('PDF progress overflow');
+   await page.setViewportSize({width:1440,height:1000});
+   await card.getByRole('button',{name:'Retry processing',exact:true}).click();
+   for(let attempt=0;attempt<30;attempt++){
+     await page.reload({waitUntil:'networkidle'});
+     if(await card.getByRole('link',{name:'View extracted evidence'}).count())break;
+     await new Promise(r=>setTimeout(r,1000));
+   }
+   await card.getByRole('link',{name:'View extracted evidence'}).click();
+   await page.getByText('Complete PDF: 26 original pages',{exact:false}).waitFor();
+   await page.getByText('Synthetic browser page 26',{exact:true}).waitFor();
+   await page.screenshot({path:'design/previews/pdf-complete-desktop.png',fullPage:true});
+   console.log('PDF UI PASS: private partial progress, mobile layout, retry and 26 original pages.');
+ }
  await page.getByRole('link',{name:'Companies',exact:true}).click();
  const sber=page.locator('article').filter({has:page.getByRole('heading',{name:'Sberbank',exact:true})});
  await sber.getByRole('button',{name:'Add to watchlist'}).click();
@@ -55,7 +77,8 @@ let browser;
  await page.getByRole('button',{name:'Upload private original'}).click();
  await page.getByRole('heading',{name:'synthetic-browser-check.pdf'}).waitFor();
  const docs=await (await page.request.get(base+'/api/v1/documents')).json();
- const version=docs[0].versions[0];
+ const uploaded=docs.find(d=>d.filename==='synthetic-browser-check.pdf');
+ const version=uploaded.versions[0];
  let job;
  for(let attempt=0;attempt<30;attempt++){
    job=await (await page.request.get(base+'/api/v1/jobs/'+version.job_id)).json();
@@ -65,7 +88,7 @@ let browser;
  if(job.state!=='succeeded')throw Error('Worker did not complete verification');
  await page.reload({waitUntil:'networkidle'});
  await page.screenshot({path:'design/previews/files-desktop.png',fullPage:true});
- const download=await page.request.get(base+`/api/v1/documents/${docs[0].id}/versions/${version.version_id}/download`);
+ const download=await page.request.get(base+`/api/v1/documents/${uploaded.id}/versions/${version.version_id}/download`);
  if(download.status()!==200||!(await download.body()).equals(pdf))throw Error('Original download mismatch');
  await page.getByRole('button',{name:'Extract English document'}).click();
  for(let attempt=0;attempt<30;attempt++){
@@ -75,7 +98,7 @@ let browser;
    await new Promise(r=>setTimeout(r,1000));
  }
  await page.reload({waitUntil:'networkidle'});
- await page.getByRole('link',{name:'View extracted evidence'}).click();
+ await page.locator('div.card').filter({has:page.getByRole('heading',{name:'synthetic-browser-check.pdf',exact:true})}).getByRole('link',{name:'View extracted evidence'}).click();
  await page.getByRole('heading',{name:'Extracted evidence'}).waitFor();
  await page.getByText('Profit: -120 USD million. Footnote 1.',{exact:true}).waitFor();
  await page.screenshot({path:'design/previews/extraction-desktop.png',fullPage:true});

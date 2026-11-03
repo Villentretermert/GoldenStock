@@ -1,6 +1,17 @@
 """Small synthetic documents for repeatable extraction checks."""
 import io
 
+
+def multipage_pdf(pages):
+    from reportlab.pdfgen import canvas
+    output = io.BytesIO()
+    document = canvas.Canvas(output)
+    for number in range(1, pages + 1):
+        document.drawString(50, 750, f'Original page {number}. Profit: -120 USD million.')
+        document.showPage()
+    document.save()
+    return output.getvalue()
+
 def workbook_bytes():
     from openpyxl import Workbook
     book=Workbook(); sheet=book.active; sheet.title='Income'

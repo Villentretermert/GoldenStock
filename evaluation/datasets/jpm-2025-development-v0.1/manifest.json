@@ -1,0 +1,56 @@
+{
+  "schema": "gs004-development-source-v1",
+  "source": {
+    "url": "https://www.jpmorganchase.com/content/dam/jpmc/jpmorgan-chase-and-co/investor-relations/documents/audited-financial-statements-2025.pdf",
+    "file": "jpmorgan-financial-statements-2025.pdf",
+    "bytes": 1145396,
+    "sha256": "fff3692cded4ca4cdb377210a8d772c37ac946e16223b4ebbb558c6a57d95e08",
+    "retrieved_on": "2026-11-03",
+    "company_id": "jpm",
+    "period": "2025",
+    "split": "development",
+    "document_family": "jpm-2025-annual-report",
+    "review_status": "unreviewed"
+  },
+  "development_only": true,
+  "reviewed_gold_facts": 0,
+  "target_corpus_documents": 30,
+  "target_corpus_facts": 500,
+  "split_scope": "Whole JPMorgan 2025 annual-report family, all sections and revisions; exclude from blind holdout",
+  "split_enforcement": "Preparation manifest only; AI Lab dataset not created",
+  "extraction": {
+    "status": "passed",
+    "seconds": 23.81,
+    "items": 3856,
+    "pages": 167,
+    "warnings": [
+      "native_and_ocr_overlap",
+      "ocr_layout_requires_review"
+    ],
+    "parser": "gs010-v1",
+    "image": "sha256:ee18fca2ea264865e790fe9692089959436026d77605663935b45e68a0c65f5a",
+    "network": "none",
+    "data_kind": "real",
+    "review_status": "unreviewed",
+    "scope": "raw parser only; not human review or complete model timing",
+    "sha256": "e1b7fd70dedd9a7a347e5c2a9cafbbe0082078e94e383f036c937c4946efe99a"
+  },
+  "review_locators": [
+    {
+      "pdf_page": 5,
+      "printed_page": 165,
+      "item_index": 1432,
+      "topic": "income"
+    },
+    {
+      "pdf_page": 7,
+      "printed_page": 167,
+      "item_index": 1434,
+      "topic": "balance_sheet"
+    }
+  ],
+  "coverage": "One official annual-report section, not the complete corpus or all requested periods",
+  "local_folder": "data/uat/jpm-2025",
+  "analyst_approval": "pending",
+  "quality_target_confirmed": false
+}

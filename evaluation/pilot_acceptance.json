@@ -47,7 +47,7 @@
     {
       "id": "ai_quality",
       "status": "pending",
-      "note": "Accuracy, precision and coverage are N/A until an analyst labels a real blind holdout and approves the protocol."
+      "note": "User approved corpus minimums and accuracy/precision/coverage targets on 2026-11-03. All three metrics remain N/A until the real blind holdout, its manifest and fact tolerances are reviewed and measured."
     },
     {
       "id": "remote_access",
@@ -67,7 +67,7 @@
     {
       "id": "daily_workload",
       "status": "pending",
-      "note": "45 real documents per day and summary latency including queue time must be measured with other GPU applications."
+      "note": "Measure 45 real documents per day, summary latency including queue time, 3 GiB free VRAM and the full report-to-reviewed-export target of 10 minutes. None is a demonstrated workload SLA yet."
     },
     {
       "id": "fund_signoff",

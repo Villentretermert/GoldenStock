@@ -23,6 +23,8 @@ docker compose exec web python -m goldenstock.admin create-admin --login owner
 GPU, загрузка весов и локальные профили: [LOCAL_AI.md](docs/LOCAL_AI.md). SEC требует собственного контакта `GS_SEC_CONTACT` в локальном `.env`.
 
 ## Документация
+- [Первый реальный кейс JPMorgan для ручной проверки](docs/JPMORGAN_FIRST_REVIEW.md)
+- [Ответы этапа 6 и принятые настройки](docs/STAGE_6_ANSWERS.md)
 - [Приёмка пилота и условия допуска](docs/PILOT_ACCEPTANCE.md)
 - [Первое занятие аналитика](docs/ANALYST_QUICKSTART.md)
 - [План двенадцати месяцев пилота](docs/PILOT_YEAR_PLAN.md)

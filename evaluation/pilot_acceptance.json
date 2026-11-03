@@ -1,0 +1,78 @@
+{
+  "policy": "gs024-v1",
+  "candidate_commit": "5dd1a9f2ff9926c2b096ac113980c86f499a579e",
+  "as_of": "2026-11-03",
+  "open_critical_defects": 0,
+  "gates": [
+    {
+      "id": "regression",
+      "status": "passed",
+      "method": "automated",
+      "data_kind": "synthetic",
+      "reviewer": "GitHub Actions and local browser test runner",
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/41680299397",
+      "candidate_commit": "5dd1a9f2ff9926c2b096ac113980c86f499a579e",
+      "note": "Local and Linux CI pytest: 246 passed, 1 skipped. Docker OCR passed separately, as did PostgreSQL and container checks. Local browser: 31 scenarios passed. This does not constitute human acceptance."
+    },
+    {
+      "id": "five_company_journey",
+      "status": "passed",
+      "method": "automated",
+      "data_kind": "synthetic",
+      "reviewer": "Automated local test runner",
+      "reference": "tests/test_pilot_journey.py",
+      "candidate_commit": "5dd1a9f2ff9926c2b096ac113980c86f499a579e",
+      "note": "Five synthetic PDF journeys passed with real parser subprocess, reviewed snapshots, valuation and XLSX/PDF/PPTX exports."
+    },
+    {
+      "id": "recovery_rehearsal",
+      "status": "passed",
+      "method": "automated",
+      "data_kind": "synthetic",
+      "reviewer": "GitHub Actions",
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/41680299397",
+      "candidate_commit": "5dd1a9f2ff9926c2b096ac113980c86f499a579e",
+      "note": "Candidate CI restored the synthetic encrypted copy into a clean Docker project and passed 15 HTTPS sessions, file hashes, reviewed knowledge, revocation and inference-outage isolation. Real external media remains a separate pending gate."
+    },
+    {
+      "id": "source_coverage",
+      "status": "pending",
+      "note": "Six SEC endpoints verified in GS-022. Analyst must confirm periods and metric coverage. English gaps for Sber and T-Technologies remain explicit."
+    },
+    {
+      "id": "real_company_journey",
+      "status": "pending",
+      "note": "Analyst must sign real JPMorgan, HSBC and Nu journeys, independent calculations and Office exports."
+    },
+    {
+      "id": "ai_quality",
+      "status": "pending",
+      "note": "Accuracy, precision and coverage are N/A until an analyst labels a real blind holdout and approves the protocol."
+    },
+    {
+      "id": "remote_access",
+      "status": "pending",
+      "note": "User selected Tailscale. Fund enrollment and second-device allow/deny/revocation checks are deferred."
+    },
+    {
+      "id": "external_backup",
+      "status": "pending",
+      "note": "User will attach separate storage later. Actual medium, schedule and restore are not accepted."
+    },
+    {
+      "id": "windows_restart",
+      "status": "pending",
+      "note": "Cold boot, Windows/WSL recovery and sleep behavior require an operator field check."
+    },
+    {
+      "id": "daily_workload",
+      "status": "pending",
+      "note": "45 real documents per day and summary latency including queue time must be measured with other GPU applications."
+    },
+    {
+      "id": "fund_signoff",
+      "status": "pending",
+      "note": "Fund owner has not signed the candidate and real pilot scope. GS-001 and GS-024 remain REVIEW."
+    }
+  ]
+}

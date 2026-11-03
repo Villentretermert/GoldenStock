@@ -1,7 +1,7 @@
 {
   "policy": "gs024-v1",
-  "candidate_commit": "5dd1a9f2ff9926c2b096ac113980c86f499a579e",
-  "as_of": "2026-11-03",
+  "candidate_commit": "30a13ce62e3df279ec1ffcaf729bf95849d75494",
+  "as_of": "2026-11-04",
   "open_critical_defects": 0,
   "gates": [
     {
@@ -9,20 +9,20 @@
       "status": "passed",
       "method": "automated",
       "data_kind": "synthetic",
-      "reviewer": "GitHub Actions and local browser test runner",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/41680299397",
-      "candidate_commit": "5dd1a9f2ff9926c2b096ac113980c86f499a579e",
-      "note": "Local and Linux CI pytest: 246 passed, 1 skipped. Docker OCR passed separately, as did PostgreSQL and container checks. Local browser: 31 scenarios passed. This does not constitute human acceptance."
+      "reviewer": "GitHub Actions",
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/41737911751",
+      "candidate_commit": "30a13ce62e3df279ec1ffcaf729bf95849d75494",
+      "note": "Candidate Linux CI: 257 passed, 1 skipped; real Linux OCR passed separately. Docker startup, private ports and PostgreSQL concurrency passed. Local browser: 15 baseline scenarios plus PDF progress/resume/mobile passed. This is technical evidence, not human acceptance."
     },
     {
       "id": "five_company_journey",
       "status": "passed",
       "method": "automated",
       "data_kind": "synthetic",
-      "reviewer": "Automated local test runner",
-      "reference": "tests/test_pilot_journey.py",
-      "candidate_commit": "5dd1a9f2ff9926c2b096ac113980c86f499a579e",
-      "note": "Five synthetic PDF journeys passed with real parser subprocess, reviewed snapshots, valuation and XLSX/PDF/PPTX exports."
+      "reviewer": "GitHub Actions",
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/41737911751",
+      "candidate_commit": "30a13ce62e3df279ec1ffcaf729bf95849d75494",
+      "note": "Candidate CI passed five synthetic PDF journeys through parser, review, snapshot, calculation, valuation and three exports. Real-company methodology remains pending."
     },
     {
       "id": "recovery_rehearsal",
@@ -30,9 +30,9 @@
       "method": "automated",
       "data_kind": "synthetic",
       "reviewer": "GitHub Actions",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/41680299397",
-      "candidate_commit": "5dd1a9f2ff9926c2b096ac113980c86f499a579e",
-      "note": "Candidate CI restored the synthetic encrypted copy into a clean Docker project and passed 15 HTTPS sessions, file hashes, reviewed knowledge, revocation and inference-outage isolation. Real external media remains a separate pending gate."
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/41737911751",
+      "candidate_commit": "30a13ce62e3df279ec1ffcaf729bf95849d75494",
+      "note": "Candidate CI restored encrypted synthetic data into a clean Docker project: 33 tables, four files and 15 HTTPS sessions. A saved PDF prefix resumed from page 26 with original locators. External media and field acceptance remain pending."
     },
     {
       "id": "source_coverage",

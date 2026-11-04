@@ -1,5 +1,7 @@
 # Публикация GitHub
 
+4 ноября 2026. GS-026 опубликована в `e8d8be2d73b609ccde2c43e65e874d73253400b2`. [Проверки CI](https://github.com/Villentretermert/GoldenStock/actions/runs/41750142768) прошли.
+
 4 ноября 2026: GS-025 опубликована в `30a13ce62e3df279ec1ffcaf729bf95849d75494`, [CI](https://github.com/Villentretermert/GoldenStock/actions/runs/41737911751) прошёл. Полные PDF, извлечения и скриншоты остались локальными.
 2026-10-27: пользователь явно разрешил публичную публикацию всех 157 файлов после пояснения состава и исключений. Снимок успешно опубликован в main, commit e53835945a39993a83202c79072802a93480c0f2. GitHub Actions run 40511684567 завершился успешно: pytest, Docker startup/readiness, PostgreSQL concurrency/recovery, OCR.
 

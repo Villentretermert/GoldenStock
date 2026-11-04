@@ -34,3 +34,23 @@ def simple_pdf(stream=b'BT /F1 16 Tf 50 750 Td (Profit: -120 USD million. Footno
     start=len(data); data+=b'xref\n0 6\n0000000000 65535 f \n'
     data+=b''.join(f'{n:010d} 00000 n \n'.encode() for n in offsets)
     return data+f'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{start}\n%%EOF'.encode()
+
+
+def sparse_workbook_bytes():
+    from openpyxl import Workbook
+    book = Workbook()
+    sheet = book.active
+    sheet.title = 'Income'
+    sheet['A1'] = 'Financial highlights'
+    sheet.merge_cells('A1:C1')
+    sheet['B2'] = 0
+    sheet['B2'].number_format = '#,##0.00'
+    sheet['B3'] = '=B2+5'
+    sheet['Z1000'] = -7
+    other = book.create_sheet('Appendix')
+    other.sheet_state = 'hidden'
+    other['Z1000'] = 'Closing note'
+    output = io.BytesIO()
+    book.save(output)
+    book.close()
+    return output.getvalue()

@@ -6,7 +6,7 @@ import shutil
 import pytest
 from goldenstock.extraction import extract, ExtractionError
 from tests.test_workspace import workspace, upload
-from scripts.extraction_fixtures import simple_pdf, workbook_bytes
+from scripts.extraction_fixtures import simple_pdf, workbook_bytes, sparse_workbook_bytes
 
 
 
@@ -16,6 +16,7 @@ from scripts.extraction_fixtures import simple_pdf, workbook_bytes
 def test_xlsx_preserves_negative_blank_merge_and_formula(tmp_path):
     path=tmp_path/'book.xlsx'; path.write_bytes(workbook_bytes())
     result=extract(path,'.xlsx')
+    assert result['parser_version']=='gs010-v1' and 'worksheet_layout' not in result
     cells={i['location']['cell']:i for i in result['items']}
     assert cells['B2']['text']=='-120'
     assert cells['C2']['text'] is None
@@ -24,6 +25,77 @@ def test_xlsx_preserves_negative_blank_merge_and_formula(tmp_path):
     assert cells['B4']['formula']=='=B2*2' and cells['B4']['text'] is None
     assert 'formula_cache_unverified' in result['warnings']
     assert all(i['review_status']=='unreviewed' and i['confidence'] is None for i in result['items'])
+
+
+def test_sparse_workbook_preserves_coordinates_and_missing_formula_cache(tmp_path):
+    path=tmp_path/'large.xlsx'
+    path.write_bytes(sparse_workbook_bytes())
+    result=extract(path,'.xlsx')
+    cells={(i['location']['sheet'],i['location']['cell']):i for i in result['items']}
+    assert set(cells)=={('Income','A1'),('Income','B2'),('Income','B3'),('Income','Z1000'),('Appendix','Z1000')}
+    assert result['worksheet_layout']==[
+        dict(sheet='Income',bounds='A1:Z1000',state='visible',merged_ranges=['A1:C1']),
+        dict(sheet='Appendix',bounds='A1:Z1000',state='hidden',merged_ranges=[])]
+    assert cells['Income','B2']['text']=='0' and cells['Income','B2']['number_format']=='#,##0.00'
+    assert cells['Income','B3']['text'] is None and cells['Income','B3']['formula']=='=B2+5'
+    assert cells['Income','A1']['location']['merged_range']=='A1:C1'
+    assert cells['Appendix','Z1000']['hidden_sheet']
+    assert result['warnings']==['formula_cache_unverified']
+
+
+def test_sparse_workbook_still_rejects_excessive_grid_and_populated_values(tmp_path,monkeypatch):
+    from goldenstock import extraction
+    path=tmp_path/'large.xlsx'
+    path.write_bytes(sparse_workbook_bytes())
+    monkeypatch.setattr(extraction,'MAX_XLSX_GRID_CELLS',51000)
+    with pytest.raises(ExtractionError,match='extraction_limit'):
+        extract(path,'.xlsx')
+    from openpyxl import Workbook
+    book=Workbook()
+    for sheet in (book.active,book.create_sheet('Second')):
+        sheet.append([0,1,2])
+    book.save(path); book.close()
+    monkeypatch.setattr(extraction,'MAX_ITEMS',4)
+    with pytest.raises(ExtractionError,match='extraction_limit'):
+        extract(path,'.xlsx')
+
+
+def test_fallback_on_json_limit_preserves_large_actual_values_limit(tmp_path,monkeypatch):
+    from goldenstock import extraction
+    from openpyxl import Workbook
+    path=tmp_path/'formatting.xlsx'
+    book=Workbook()
+    book.active['A1']='Start'
+    book.active['T20']='End'
+    book.save(path)
+    monkeypatch.setattr(extraction,'MAX_BYTES',20000)
+    result=extract(path,'.xlsx')
+    assert result['parser_version']==extraction.COMPACT_XLSX_VERSION
+    assert [i['text'] for i in result['items']]==['Start','End']
+    book.active['A2']='x'*21000
+    book.save(path); book.close()
+    with pytest.raises(ExtractionError,match='extraction_limit'):
+        extract(path,'.xlsx')
+
+
+def test_compact_range_formulas_keep_their_source_metadata(tmp_path,monkeypatch):
+    from openpyxl import Workbook
+    from openpyxl.worksheet.formula import ArrayFormula, DataTableFormula
+    from xml.etree.ElementTree import fromstring
+    from goldenstock import extraction
+    book=Workbook()
+    other=book.create_sheet('Table')
+    book.active['A1']=ArrayFormula('A1:A2','=C1*2')
+    other['A1']=DataTableFormula('A1:B2',r1='C1')
+    for sheet in book:
+        sheet['C1']=0
+    path=tmp_path/'range-formulas.xlsx'
+    book.save(path); book.close()
+    monkeypatch.setattr(extraction,'MAX_ITEMS',4)
+    result=extract(path,'.xlsx')
+    array,table=[fromstring(i['formula']) for i in result['items'] if i['formula']]
+    assert array.attrib=={'t':'array','ref':'A1:A2'} and array.text=='=C1*2'
+    assert table.attrib=={'t':'dataTable','ref':'A1:B2','r1':'C1'}
 
 
 def test_pdf_text_page_and_footnote(tmp_path):
@@ -70,7 +142,8 @@ def test_scan_ocr(tmp_path):
     assert all(i['method']=='ocr' and 0<=i['confidence']<=1 for i in result['items'])
 
 
-def test_extraction_queue_privacy_and_idempotency(workspace, monkeypatch):
+@pytest.mark.parametrize('large',[False,True])
+def test_extraction_queue_privacy_and_idempotency(workspace, monkeypatch,large):
     from goldenstock.jobs import process_one
     from goldenstock.models import Extraction
     from sqlalchemy.orm import Session
@@ -80,7 +153,8 @@ def test_extraction_queue_privacy_and_idempotency(workspace, monkeypatch):
     # subprocess needs an explicit module path in native pytest, unlike Docker.
     monkeypatch.setenv('PYTHONPATH',str(Path('src').resolve()))
     a,b,e=connect(),connect('bob'),connect('eve')
-    receipt=upload(a,content=workbook_bytes(),name='test.xlsx').json(); job=receipt['job_id']
+    content=sparse_workbook_bytes() if large else workbook_bytes()
+    receipt=upload(a,content=content,name='test.xlsx').json(); job=receipt['job_id']
     url=f'/api/v1/jobs/{job}/extract'
     assert a.post(url).status_code==409
     process_one(app.state.engine,app.state.settings)
@@ -91,6 +165,9 @@ def test_extraction_queue_privacy_and_idempotency(workspace, monkeypatch):
     assert result.status_code==200, a.get(f'/api/v1/jobs/{job}').text
     assert result.json()['source_sha256']==receipt['sha256']
     assert a.get(f'/extraction/{job}').status_code==200
+    if large:
+        assert result.json()['total']==5
+        assert 'Worksheet ranges' in a.get(f'/extraction/{job}').text
     assert a.get(f'/api/v1/jobs/{job}/extraction?limit=201').status_code==422
     for client in (b,e):
         assert client.get(f'/api/v1/jobs/{job}/extraction').status_code==404

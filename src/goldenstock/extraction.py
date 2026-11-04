@@ -10,6 +10,8 @@ PDF_PARSER_VERSION = 'gs025-pdf-v1'
 PDF_CHUNK_PAGES = 25
 MAX_PDF_PAGES = 1000
 MAX_PDF_BYTES = 16 * 1024 * 1024
+MAX_XLSX_GRID_CELLS = 1_000_000
+COMPACT_XLSX_VERSION = 'gs027-xlsx-v1'
 
 
 class ExtractionError(Exception):
@@ -36,28 +38,70 @@ class Result:
                     review_status='unreviewed')
 
 
-def extract_xlsx(path, result):
+def xlsx_cells(book, cached, *, compact):
+    from openpyxl.utils import get_column_letter
+    result = Result()
+    layout = []
+    for sheet in book.worksheets:
+        ranges = sheet.merged_cells.ranges
+        anchors = {}
+        if compact:
+            # Only the top-left cell of a merged range can contain a value.
+            anchors = {(area.min_row, area.min_col): str(area) for area in ranges}
+            layout.append(dict(sheet=sheet.title, bounds=f'A1:{get_column_letter(sheet.max_column)}{sheet.max_row}',
+                               state=sheet.sheet_state, merged_ranges=sorted(anchors.values())))
+        for row in sheet.iter_rows():
+            for cell in row:
+                formula = cell.data_type == 'f'
+                if compact and cell.value is None and not formula:
+                    continue
+                if compact:
+                    merged = anchors.get((cell.row, cell.column))
+                else:
+                    merged = next((str(area) for area in ranges if cell.coordinate in area), None)
+                value = cached[sheet.title][cell.coordinate].value if formula else cell.value
+                formula_text = str(cell.value) if formula else None
+                if formula:
+                    result.warnings.add('formula_cache_unverified')
+                    if compact and not isinstance(cell.value, str):
+                        # Array and data-table formulas carry a range and attributes instead of a string.
+                        from xml.etree.ElementTree import Element, tostring
+                        node = Element('f', dict(cell.value))
+                        node.text = getattr(cell.value, 'text', None)
+                        formula_text = tostring(node, encoding='unicode')
+                result.add('cell', value, dict(sheet=sheet.title, cell=cell.coordinate,
+                    row=cell.row, column=cell.column, merged_range=merged),
+                    formula=formula_text, number_format=cell.number_format,
+                    hidden_sheet=sheet.sheet_state != 'visible')
+    if not result.items:
+        raise ExtractionError('no_extractable_content')
+    payload = result.output()
+    if compact:
+        payload.update(parser_version=COMPACT_XLSX_VERSION, worksheet_layout=layout)
+    # Include layout, array separators and escaping in the final subprocess output budget.
+    if len(json.dumps(payload, ensure_ascii=True)) > MAX_BYTES:
+        raise ExtractionError('extraction_limit')
+    return payload
+
+
+def extract_xlsx(path):
     from openpyxl import load_workbook
     # Never evaluate formulas or follow external links; retain cached values separately.
     with open(path, 'rb') as stream, open(path, 'rb') as cached_stream:
         book = load_workbook(stream, data_only=False, keep_links=False)
         cached = load_workbook(cached_stream, data_only=True, keep_links=False)
         try:
-            for sheet in book:
-                if sheet.max_row * sheet.max_column > MAX_ITEMS:
-                    raise ExtractionError('extraction_limit')
-                for row in sheet.iter_rows():
-                    for cell in row:
-                        formula = cell.data_type == 'f'
-                        # Range membership preserves blank merged followers, not duplicated values.
-                        merged = next((str(r) for r in sheet.merged_cells.ranges if cell.coordinate in r), None)
-                        value = cached[sheet.title][cell.coordinate].value if formula else cell.value
-                        if formula:
-                            result.warnings.add('formula_cache_unverified')
-                        result.add('cell', value, dict(sheet=sheet.title, cell=cell.coordinate,
-                            row=cell.row, column=cell.column, merged_range=merged),
-                            formula=str(cell.value) if formula else None, number_format=cell.number_format,
-                            hidden_sheet=sheet.sheet_state != 'visible')
+            areas = [sheet.max_row * sheet.max_column for sheet in book.worksheets]
+            total = sum(areas)
+            if any(area > MAX_ITEMS for area in areas) or total > MAX_XLSX_GRID_CELLS:
+                raise ExtractionError('extraction_limit')
+            if total <= MAX_ITEMS:
+                try:
+                    return xlsx_cells(book, cached, compact=False)
+                except ExtractionError as exc:
+                    if str(exc) != 'extraction_limit':
+                        raise
+            return xlsx_cells(book, cached, compact=True)
         finally:
             book.close(); cached.close()
 
@@ -153,8 +197,10 @@ def extract_pdf_chunk(path, first_page, page_count):
 
 
 def extract(path, extension):
+    if extension == '.xlsx':
+        return extract_xlsx(path)
     result = Result()
-    parsers = {'.pdf': extract_pdf, '.xlsx': extract_xlsx, '.pptx': extract_pptx}
+    parsers = {'.pdf': extract_pdf, '.pptx': extract_pptx}
     if extension not in parsers:
         raise ExtractionError('unsupported_format')
     coverage = parsers[extension](path, result)

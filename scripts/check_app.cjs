@@ -23,6 +23,27 @@ let browser;
  await page.getByLabel('Password',{exact:true}).fill(process.env.GS_QA_PASSWORD);
  await page.getByRole('button',{name:'Sign in',exact:true}).click();
  await page.getByRole('heading',{name:'Your watchlist',exact:true}).waitFor();
+ if(process.env.GS_QA_WORKBOOK){
+   await page.goto(base+'/files?company_id=jpm');
+   const name='synthetic-compact-book.xlsx';
+   await page.getByLabel('Original file').setInputFiles({name,mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from(process.env.GS_QA_WORKBOOK,'base64')});
+   await page.getByRole('button',{name:'Upload private original'}).click();
+   const card=page.locator('div.card').filter({has:page.getByRole('heading',{name,exact:true})});
+   await card.waitFor();
+   for(const [role,title] of [['button','Extract English document'],['link','View extracted evidence']]){
+     const action=card.getByRole(role,{name:title,exact:true});
+     for(let attempt=0;attempt<30&&!await action.count();attempt++){
+       await page.reload({waitUntil:'networkidle'});
+       if(!await action.count())await new Promise(r=>setTimeout(r,700));
+     }
+     await action.click();
+   }
+   await page.getByText('Worksheet ranges',{exact:true}).click();
+   await page.getByText('Appendix · A1:Z1000 · hidden · 0 merged ranges',{exact:true}).waitFor();
+   await page.locator('details').filter({hasText:'Worksheet ranges'}).screenshot({path:'design/previews/compact-workbook.png'});
+   if(await page.locator('tbody tr').count()!==5)throw Error('Unexpected compact workbook item count');
+   console.log('Compact workbook UI PASS: original, verified job, five source cells and sheet layout.');
+ }
  if(process.env.GS_QA_PDF_CHUNKS==='1'){
    await page.goto(base+'/files');
    const card=page.locator('div.card').filter({has:page.getByRole('heading',{name:'synthetic-pdf-progress.pdf',exact:true})});

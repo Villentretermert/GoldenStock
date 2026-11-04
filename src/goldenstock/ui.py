@@ -167,6 +167,13 @@ def mount_ui(app):
         body+=f'<p><a href="{e(original)}">{e(result["filename"])}</a> · Version {result["version_number"]} · {result["total"]} items</p><p>Warnings: {e(", ".join(result["warnings"]).replace("_", " ") or "None reported")}</p>'
         if result.get('coverage'):
             body+=f'<p>Complete PDF: {result["coverage"]["total_pages"]} original pages processed. Page numbers below refer to the original file.</p>'
+        if result.get('worksheet_layout'):
+            body+='<p>This workbook lists populated cells and formulas. Unlisted positions inside each sheet range are empty or covered by a merge.</p><details><summary>Worksheet ranges</summary><ul>'
+            for sheet in result['worksheet_layout']:
+                count=len(sheet['merged_ranges'])
+                label='merged range' if count==1 else 'merged ranges'
+                body+=f'<li>{e(sheet["sheet"])} · {e(sheet["bounds"])} · {e(sheet["state"])} · {count} {label}</li>'
+            body+='</ul></details>'
         if result['filename'].lower().endswith('.pdf'):
             body+='<form method="get"><label>Original PDF page<input name="pdf_page" type="number" min="1" required></label><button>Go to page</button></form>'
         if pdf_page is not None and not result['items']:

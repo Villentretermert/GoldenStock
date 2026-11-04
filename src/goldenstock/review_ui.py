@@ -1,11 +1,26 @@
 """Human review pairs each current fact with its original extracted evidence."""
 import json
+from html import escape
 from fastapi import Request, HTTPException
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from goldenstock.models import Extraction
 from goldenstock.reviews import review_state, snapshots
 from goldenstock.normalization import METRICS
+
+
+def source_excerpt(raw, fact):
+    """Keep the selected occurrence visible even when it is beyond the first 5,000 characters."""
+    span=fact.get('selected_span')
+    if not span:
+        return escape(raw[:5000])
+    start,end=span
+    if not 0<=start<end<=len(raw) or raw[start:end]!=fact.get('number_text'):
+        return escape(raw[:5000])
+    left=0 if end<=5000 else max(0,start-2000)
+    right=left+5000
+    return (('…' if left else '')+escape(raw[left:start])+'<mark>'+escape(raw[start:end])+
+            '</mark>'+escape(raw[end:right])+('…' if right<len(raw) else ''))
 
 
 def mount_review_ui(app):
@@ -28,7 +43,7 @@ def mount_review_ui(app):
                     cache[f['version_id']]=json.loads(db.get(Extraction,f['version_id']).payload)
                 item=cache[f['version_id']]['items'][f['item_index']]
                 original=f'/api/v1/documents/{f["document_id"]}/versions/{f["version_id"]}/download'
-                body+=f'<article class="card" id="review-{e(f["id"])}"><h2>{e(METRICS[f["metric"]][0])}: {e(f["value"])} {e(f["currency"] or f["canonical_unit"])}</h2><div class="grid"><section><h3>Source</h3><p style="white-space:pre-wrap">{e((item["text"] or "[empty]")[:5000])}</p><p>{e(json.dumps(item["location"]))}</p><a href="{e(original)}">Download original</a> · <a href="/extraction/{e(f["job_id"])}?offset={f["item_index"]}">Full extracted evidence</a></section><section><h3>Mapped fact</h3><p>{e(f["number_text"])} · {e(f["scale"])} · {e(f["unit"])}<br>{e(f["period_kind"])} {e(f["period_start"])} – {e(f["period_end"])}<br>{e(f["scope"])}: {e(f["scope_detail"])} · {e(f["accounting"])}</p><p>{e(f["definition"])}</p><p>Warnings: {e(", ".join(f["warnings"]) or "None reported")}</p></section></div>'
+                body+=f'<article class="card" id="review-{e(f["id"])}"><h2>{e(METRICS[f["metric"]][0])}: {e(f["value"])} {e(f["currency"] or f["canonical_unit"])}</h2><div class="grid"><section><h3>Source</h3><p style="white-space:pre-wrap">{source_excerpt(item["text"] or "[empty]",f)}</p><p>{e(json.dumps(item["location"]))}</p><a href="{e(original)}">Download original</a> · <a href="/extraction/{e(f["job_id"])}?offset={f["item_index"]}">Full extracted evidence</a></section><section><h3>Mapped fact</h3><p>{e(f["number_text"])} · {e(f["scale"])} · {e(f["unit"])}<br>{e(f["period_kind"])} {e(f["period_start"])} – {e(f["period_end"])}<br>{e(f["scope"])}: {e(f["scope_detail"])} · {e(f["accounting"])}</p><p>{e(f["definition"])}</p><p>Warnings: {e(", ".join(f["warnings"]) or "None reported")}</p></section></div>'
                 decision=f['review']; revision=decision['revision'] if decision else 0
                 body+=f'<p>Status: {e(f["review_status"])}</p>'
                 if decision: body+=f'<p>Latest decision: {e(decision["note"])}</p>'

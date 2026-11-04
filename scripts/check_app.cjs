@@ -41,8 +41,28 @@ let browser;
    }
    await card.getByRole('link',{name:'View extracted evidence'}).click();
    await page.getByText('Complete PDF: 26 original pages',{exact:false}).waitFor();
-   await page.getByText('Synthetic browser page 26',{exact:true}).waitFor();
+   await page.getByText('Synthetic browser page 26',{exact:false}).waitFor();
    await page.screenshot({path:'design/previews/pdf-complete-desktop.png',fullPage:true});
+   await page.getByLabel('Original PDF page',{exact:true}).fill('26');
+   await page.getByRole('button',{name:'Go to page',exact:true}).click();
+   await page.getByRole('link',{name:'Normalize',exact:true}).first().click();
+   await page.getByRole('heading',{name:'Original evidence · Original PDF page 26'}).waitFor();
+   await page.getByLabel('Exact number from this evidence').fill('213,000');
+   const next=page.getByRole('button',{name:'Find next occurrence'});
+   await next.click();
+   await page.locator('#chosen-row').filter({hasText:'Total assets'}).waitFor();
+   await next.click();
+   await page.locator('#chosen-row').filter({hasText:'Total liabilities and equity'}).waitFor();
+   const chosen=await page.locator('input[name="source_start"]').inputValue();
+   if(+chosen!==(await page.locator('#mapping-evidence').textContent()).lastIndexOf('213,000'))throw Error('Wrong chosen source position');
+   await page.locator('#chosen-row').screenshot({path:'design/previews/source-occurrence.png'});
+   await page.getByLabel('Exact number from this evidence').fill('198,000');
+   if(!(await page.locator('input[name="source_start"]').isDisabled()))throw Error('Edited amount retained old position');
+   await next.click();
+   await saveMappedFact('assets','millions','Total group assets','instant');
+   await page.goto(base+'/review/jpm');
+   await page.locator('article mark').filter({hasText:'198,000'}).waitFor();
+   await page.getByText('Status: unreviewed',{exact:true}).waitFor();
    console.log('PDF UI PASS: private partial progress, mobile layout, retry and 26 original pages.');
  }
  await page.getByRole('link',{name:'Companies',exact:true}).click();
@@ -109,17 +129,20 @@ let browser;
  async function mapFact(scale){
    await page.goto(base+'/normalize/'+version.job_id+'/0');
    await page.getByLabel('Exact number from this evidence').fill('-120');
-   await page.getByLabel('Metric',{exact:true}).selectOption('profit');
+   await saveMappedFact('profit',scale,'Total profit after tax','year');
+ }
+ async function saveMappedFact(metric,scale,definition,period){
+   await page.getByLabel('Metric',{exact:true}).selectOption(metric);
    await page.getByLabel('Reported unit').selectOption('money');
    await page.getByLabel('Reported scale').selectOption(scale);
    await page.getByLabel('Currency code',{exact:false}).fill('USD');
-   await page.getByLabel('Period kind').selectOption('year');
-   await page.getByLabel('Period start',{exact:false}).fill('2025-01-01');
-   await page.getByLabel('Period end').fill('2025-12-31');
+   await page.getByLabel('Period kind').selectOption(period);
+   if(period==='year')await page.getByLabel('Period start',{exact:false}).fill('2025-01-01');
+   await page.getByLabel('Period end').fill(period==='year'?'2025-12-31':'2024-12-31');
    await page.getByLabel('Reporting perimeter').selectOption('group');
    await page.getByLabel('Exact entities / segment included').fill('Synthetic consolidated group');
    await page.getByLabel('Accounting basis').selectOption('IFRS');
-   await page.getByLabel('Metric definition:',{exact:false}).fill('Total profit after tax');
+   await page.getByLabel('Metric definition:',{exact:false}).fill(definition);
    await page.getByLabel('Disclosure version').selectOption('original');
    await page.getByRole('button',{name:'Save unreviewed fact'}).click();
    await page.getByRole('heading',{name:'Facts & conflicts',exact:true}).waitFor();

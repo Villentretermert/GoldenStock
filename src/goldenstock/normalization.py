@@ -27,6 +27,7 @@ class FactInput(BaseModel):
     job_id: str = Field(min_length=1,max_length=32)
     item_index: int = Field(ge=0,le=49999)
     number_text: str = Field(min_length=1,max_length=80)
+    source_start: int | None = Field(default=None, ge=0, strict=True)
     metric: str
     unit: Literal['money','count','fraction','percent','bps']
     scale: Literal['units','thousands','millions','billions']
@@ -111,12 +112,22 @@ def normalize(data, item):
     if raw is None or item.get('merged_follower'):
         raise ValueError('No independently reported value in this item')
     selected=data.number_text
-    positions=[m.start() for m in re.finditer(re.escape(selected),raw)]
-    if len(positions)!=1:
-        raise ValueError('Select a number occurring exactly once in the source item')
-    start=positions[0]; end=start+len(selected)
-    prefix=raw[:start].rstrip(); suffix=raw[end:].lstrip()
-    if (prefix and prefix[-1] in '0123456789.,+-\u2212(') or (suffix and suffix[0] in '0123456789.,%)'):
+    start=data.source_start
+    if start is None:
+        start=raw.find(selected)
+        if start<0 or raw.find(selected,start+1)>=0:
+            raise ValueError('Enter the exact number and choose its occurrence in the source')
+    if not raw.startswith(selected,start):
+        raise ValueError('Selected number does not match its source position')
+    end=start+len(selected)
+    prefix=raw[:start]; suffix=raw[end:]
+    # Spaces separate annual columns. A separated sign, decimal or percent still belongs to the number.
+    pdf_columns=(item.get('kind')=='text' and item.get('method')=='native' and 'page' in item['location'])
+    left_digit=prefix[-1:] if pdf_columns else prefix.rstrip()[-1:]
+    right_digit=suffix[:1] if pdf_columns else suffix.lstrip()[:1]
+    if (left_digit.isdigit() or right_digit.isdigit() or
+        prefix.rstrip().endswith(('.', ',', '+', '-', '\u2212', '(')) or
+        suffix.lstrip().startswith(('.', ',', '%', ')'))):
         raise ValueError('Select the complete number, including sign and percent symbol')
     value=number(selected,data.unit,data.scale)
     if data.metric=='mau' and (Decimal(value)<0 or Decimal(value)!=Decimal(value).to_integral_value()):
@@ -135,7 +146,8 @@ def normalize(data, item):
         digits=selected.strip().strip('()').strip().rstrip('%').strip().replace(',','')
         decimals=len(digits.split('.')[1]) if '.' in digits else 0
         radius=Decimal(number(format(Decimal(10)**(-decimals),'f'),data.unit,data.scale))/2
-    return dict(data.model_dump(mode='json'),value=value,rounding_radius=str(radius),canonical_unit='fraction' if METRICS[data.metric][1]=='ratio' else data.unit,
+    # selected_span already identifies the occurrence in historical fact fingerprints.
+    return dict(data.model_dump(mode='json',exclude={'source_start'}),value=value,rounding_radius=str(radius),canonical_unit='fraction' if METRICS[data.metric][1]=='ratio' else data.unit,
         selected_span=[start,end],location=item['location'],method=item['method'],confidence=item.get('confidence'),
         warnings=warnings,review_status='unreviewed',policy=POLICY)
 

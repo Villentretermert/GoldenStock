@@ -31,6 +31,7 @@ def mount_facts_ui(app):
             company_id=db.get(Document,result['document_id']).company_id
         fields=hidden('job_id',job_id)+hidden('item_index',item_index)+hidden('supersedes',supersedes)
         fields+=field('number_text','Exact number from this evidence',raw if len(raw)<=80 else '')
+        fields+='<input type="hidden" name="source_start" disabled><button type="button" id="find-occurrence">Find next occurrence</button><p id="chosen-row" aria-live="polite"></p>'
         fields+=select('metric','Metric',[(k,v[0]) for k,v in METRICS.items()])
         fields+=select('unit','Reported unit',[(k,k) for k in ['money','count','fraction','percent','bps']])
         fields+=select('scale','Reported scale',[(k,k) for k in ['units','thousands','millions','billions']])
@@ -46,7 +47,11 @@ def mount_facts_ui(app):
         fields+=select('disclosure','Disclosure version',[(k,k) for k in ['original','restated','unknown']])
         fields+=field('published_on','Publication date (optional)',required=False,kind='date')
         body='<h1>Normalize evidence</h1><div class="notice">Map a reported number to a metric. Context is supplied by you, not inferred. This creates an unreviewed fact; approval comes later.</div>'
-        body+=f'<div class="card"><h2>Original evidence</h2><p style="white-space:pre-wrap">{e(raw)}</p><a href="/extraction/{e(job_id)}?offset={item_index}">Back to evidence</a></div>'
+        # A character reference preserves CR in the DOM, including for legacy CRLF evidence.
+        escaped_raw=e(raw).replace(chr(13),'&#13;')
+        origin=f' · Original PDF page {e(item["location"]["page"])}' if 'page' in item['location'] else ''
+        body+=f'<div class="card"><h2>Original evidence{origin}</h2><p id="mapping-evidence" style="white-space:pre-wrap">{escaped_raw}</p><a href="/extraction/{e(job_id)}?offset={item_index}">Back to evidence</a></div>'
+        body+='<p>Enter the amount as printed. If it occurs more than once, use Find next occurrence until the highlighted amount is in the required row and year column.</p>'
         body+='<details><summary>Metric definitions</summary>'+''.join(f'<p><b>{e(v[0])}:</b> {e(v[3])}</p>' for v in METRICS.values())+'</details>'
         return page('Normalize evidence',body+'<div class="card">'+form('/api/v1/facts','Save unreviewed fact',fields,next='/facts/'+company_id)+'</div>',actor)
 

@@ -168,7 +168,7 @@ def extract_job(job_id: str, request: Request):
 
 
 @router.get('/jobs/{job_id}/extraction')
-def extraction_result(job_id: str, request: Request, offset: int = 0, limit: int = 100):
+def extraction_result(job_id: str, request: Request, offset: int = 0, limit: int = 100, pdf_page: int | None = None):
     actor=authenticate(request)
     if offset<0 or not 1<=limit<=200:
         raise HTTPException(422,'Invalid page bounds')
@@ -180,6 +180,11 @@ def extraction_result(job_id: str, request: Request, offset: int = 0, limit: int
         payload=json.loads(result.payload)
         items=payload.pop('items')
         version=db.get(DocumentVersion,job.version_id)
+        if pdf_page is not None:
+            if not version.filename.lower().endswith('.pdf') or pdf_page<1:
+                raise HTTPException(422,'Choose an original PDF page starting at 1')
+            # Navigate in the original array, preserving indices used by facts and AI evidence.
+            offset=next((i for i,item in enumerate(items) if item['location'].get('page')==pdf_page),len(items))
         return dict(payload,version_id=result.version_id,source_sha256=result.source_sha256,
             document_id=version.document_id,filename=version.filename,version_number=version.number,
             total=len(items),offset=offset,items=items[offset:offset+limit])

@@ -29,13 +29,42 @@ label{display:block;margin:10px 0 16px}label input,label select{display:block;ma
 textarea{display:block;width:100%;max-width:100%;font:inherit;padding:10px;border:1px solid #b8c7b9;border-radius:5px}.sensitivity td,.sensitivity th{white-space:nowrap;overflow-wrap:normal}.valuation-price{font-size:32px;margin:12px 0;color:#285641}.template-map{min-width:760px} input.check{width:auto;display:inline}fieldset{border:1px solid #d8e0d6;border-radius:8px;margin:16px 0;padding:16px;min-width:0}
 @media(max-width:600px){h1{font-size:30px}header{padding:16px 22px;gap:12px}main{padding:22px 16px}.card{padding:18px}nav{gap:12px;font-size:14px}}
 '''
-JS = '''
+JS = r'''
 const updatesLink=document.getElementById('updates-link');
 async function refreshUpdates(){if(!updatesLink||document.hidden)return;try{const response=await fetch('/api/v1/notifications/count');if(response.ok){const data=await response.json();updatesLink.textContent='Updates'+(data.unread_count?' ('+data.unread_count+')':'');}}catch{}}
 refreshUpdates();if(updatesLink)setInterval(refreshUpdates,60000);
+const evidence=document.getElementById('mapping-evidence');
+if(evidence){
+  const amount=document.querySelector('input[name="number_text"]');
+  const position=document.querySelector('input[name="source_start"]');
+  const preview=document.getElementById('chosen-row');
+  const raw=evidence.textContent;
+  let previous=-1;
+  amount.addEventListener('input',()=>{
+    position.disabled=true; previous=-1; preview.replaceChildren();
+  });
+  document.getElementById('find-occurrence').addEventListener('click',()=>{
+    const value=amount.value;
+    if(!value.trim()){preview.textContent='Enter the exact reported number first.';return;}
+    let index=raw.indexOf(value,previous+1);
+    if(index<0)index=raw.indexOf(value);
+    if(index<0){position.disabled=true;preview.textContent='No match in this evidence item.';return;}
+    previous=index;
+    // The API stores Python character offsets. Browser string indices count UTF-16 units.
+    position.value=Array.from(raw.slice(0,index)).length;
+    position.disabled=false;
+    const end=index+value.length;
+    const lineStart=raw.lastIndexOf('\n',index-1)+1;
+    const newline=raw.indexOf('\n',end);
+    const lineEnd=newline<0?raw.length:newline;
+    const mark=document.createElement('mark');mark.textContent=value;
+    const line=raw.slice(0,index).split('\n').length;
+    preview.replaceChildren('Selected line '+line+' · '+raw.slice(Math.max(lineStart,index-180),index),mark,raw.slice(end,Math.min(lineEnd,end+180)));
+  });
+}
 document.querySelectorAll('form[data-api]').forEach(form=>form.addEventListener('submit',async event=>{
 event.preventDefault();const message=document.getElementById('message');message.textContent='';
-const button=form.querySelector('button');if(button)button.disabled=true;
+const button=form.querySelector('button:not([type="button"])');if(button)button.disabled=true;
 try{const fields=new FormData(form);let body;const headers={'X-CSRF-Token':document.querySelector('meta[name="csrf"]').content};
 if(form.dataset.valuation){
 const v=Object.fromEntries(fields);const scenarios={};
@@ -63,6 +92,7 @@ for(const k of ['evidence_id','metric','number_text','quote','currency','scale',
 body=JSON.stringify({title:v.title,kind:v.kind,split:v.split,parent_id:v.parent_id||null,reference_confirmed:fields.has('reference_confirmed'),cases:[{job_id:v.job_id||null,company_id:v.company_id||null,offset:Number(v.offset||0),expected}]});headers['Content-Type']='application/json';}
 else if(form.dataset.upload){body=fields;form.dataset.requestKey ||= crypto.randomUUID();headers['Idempotency-Key']=form.dataset.requestKey;}
 else{let values=Object.fromEntries(fields);for(const k of ['shared','active'])if(k in values)values[k]=values[k]==='true';
+if('source_start' in values)values.source_start=Number(values.source_start);
 if('revision' in values)values.revision=Number(values.revision);body=JSON.stringify(values);headers['Content-Type']='application/json';}
 const response=await fetch(form.dataset.api,{method:form.dataset.method||'POST',headers,body});const result=await response.json();
 if(!response.ok)throw new Error(typeof result.detail==='string'?result.detail:'Please check the entered values');
@@ -124,18 +154,23 @@ def mount_ui(app):
     from goldenstock.review_ui import mount_review_ui
     mount_review_ui(app)
     @app.get('/extraction/{job_id}', response_class=HTMLResponse)
-    def extraction_page(job_id: str, request: Request, offset: int = 0):
+    def extraction_page(job_id: str, request: Request, offset: int = 0, pdf_page: int | None = None):
         from goldenstock.documents import extraction_result
         import json
         actor=actor_or_none(request)
         if not actor:
             return RedirectResponse('/login',status_code=303)
-        result=extraction_result(job_id,request,offset,100)
+        result=extraction_result(job_id,request,offset,100,pdf_page)
+        offset=result['offset']
         body='<h1>Extracted evidence</h1><div class="notice">Unreviewed. Check the original before using these values. OCR confidence measures recognition, not financial accuracy. English language requires analyst confirmation.</div>'
         original=f'/api/v1/documents/{result["document_id"]}/versions/{result["version_id"]}/download'
         body+=f'<p><a href="{e(original)}">{e(result["filename"])}</a> · Version {result["version_number"]} · {result["total"]} items</p><p>Warnings: {e(", ".join(result["warnings"]).replace("_", " ") or "None reported")}</p>'
         if result.get('coverage'):
             body+=f'<p>Complete PDF: {result["coverage"]["total_pages"]} original pages processed. Page numbers below refer to the original file.</p>'
+        if result['filename'].lower().endswith('.pdf'):
+            body+='<form method="get"><label>Original PDF page<input name="pdf_page" type="number" min="1" required></label><button>Go to page</button></form>'
+        if pdf_page is not None and not result['items']:
+            return page('Extracted evidence',body+f'<p>No extracted evidence on original page {pdf_page}.</p>',actor)
         body+='<div class="table-wrap"><table><thead><tr><th>Origin</th><th>Raw value</th><th>Method / confidence</th></tr></thead><tbody>'
         for item_index,item in enumerate(result['items'],offset):
             value='[empty]' if item['text'] is None else item['text']

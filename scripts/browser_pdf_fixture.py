@@ -15,7 +15,11 @@ credentials=json.load(sys.stdin)
 app=create_app()
 buffer=io.BytesIO(); pdf=canvas.Canvas(buffer)
 for number in range(1,27):
-    pdf.drawString(50,750,f'Synthetic browser page {number}'); pdf.showPage()
+    pdf.drawString(50,750,f'Synthetic browser page {number}')
+    if number==26:
+        pdf.drawString(50,700,'Total assets 213,000 198,000')
+        pdf.drawString(50,680,'Total liabilities and equity 213,000 198,000')
+    pdf.showPage()
 pdf.save()
 with TestClient(app) as client:
     client.headers['origin']=app.state.settings.public_url

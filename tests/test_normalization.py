@@ -49,6 +49,53 @@ def test_scale_conversion_and_core_blocker():
                       normalized('b',metric='roe',unit='fraction',currency='',scale='units',number_text='0.02')])==[]
 
 
+def test_pdf_adjacent_year_columns_preserve_sign_and_legacy_fingerprint():
+    text='Equity 312,300 298,001\nLoss ( 120 ) ( 140 )\nReturn 12.5 %'
+    item=dict(kind='text',method='native',location={'page':19},text=text)
+    plain=normalize(FactInput(**context(number_text='312,300')),item)
+    chosen=normalize(FactInput(**context(number_text='312,300',source_start=text.index('312,300'))),item)
+    assert chosen==plain and 'source_start' not in chosen
+    for partial in ('312','312,30','120','12.5'):
+        with pytest.raises(ValueError):
+            normalize(FactInput(**context(number_text=partial,source_start=text.index(partial))),item)
+    with pytest.raises(ValueError):
+        normalize(FactInput(**context(number_text='312,300')),dict(item,kind='cell'))
+
+
+def test_choose_repeated_pdf_row_and_review_exact_occurrence(workspace):
+    from goldenstock.ui import mount_ui
+    app,connect=workspace; mount_ui(app)
+    client=connect(); receipt=seed(client,app)
+    raw='📊 FY 2025 and FY 2024\r\nAssets 312,300 298,001\r\n'+('Other line\n'*510)+'Liabilities and equity <A> 312,300 298,001'
+    with Session(app.state.engine) as db,db.begin():
+        result=db.get(Extraction,receipt['version_id'])
+        result.payload=json.dumps(dict(warnings=[],items=[
+            dict(kind='text',text='Cover',location={'page':1},method='native'),
+            dict(kind='text',text=raw,location={'page':199},method='native')]))
+    url='/api/v1/jobs/'+receipt['job_id']+'/extraction'
+    jump=client.get(url+'?pdf_page=199').json()
+    assert jump['offset']==1 and jump['items'][0]['text']==raw
+    assert client.get(url+'?pdf_page=198').json()['items']==[]
+    assert client.get(url+'?pdf_page=0').status_code==422
+    assert 'No extracted evidence on original page 198' in client.get('/extraction/'+receipt['job_id']+'?pdf_page=198').text
+    data=context(job_id=receipt['job_id'],item_index=1,number_text='312,300')
+    assert client.post('/api/v1/facts',json=data).status_code==422
+    for bad in (-1,True,'5',len(raw),raw.rindex('312,300')-1):
+        assert client.post('/api/v1/facts',json=data|dict(source_start=bad)).status_code==422
+    first,last=(client.post('/api/v1/facts',json=data|dict(source_start=i)).json()
+                for i in (raw.index('312,300'),raw.rindex('312,300')))
+    assert first['id']!=last['id'] and first['source_sha256']==last['source_sha256']==receipt['sha256']
+    assert last['selected_span']==[raw.rindex('312,300'),raw.rindex('312,300')+7]
+    assert last['review_status']=='unreviewed'
+    assert client.post('/api/v1/facts',json=data|dict(source_start=raw.rindex('312,300'))).json()['id']==last['id']
+    html=client.get('/review/sber').text
+    assert 'Assets <mark>312,300</mark>' in html
+    assert 'Liabilities and equity &lt;A&gt; <mark>312,300</mark>' in html
+    for other in (connect('bob'),connect('eve')):
+        assert other.get(url+'?pdf_page=199').status_code==404
+        assert other.post('/api/v1/facts',json=data|dict(source_start=raw.index('312,300'))).status_code==404
+
+
 @pytest.mark.parametrize('change',[
     {'currency':'RUB'},{'scope':'bank'},{'accounting':'US_GAAP'},{'definition':'Profit attributable to owners'},
     {'period_kind':'ytd'}, {'period_kind':'quarter','period_start':'2025-10-01'}])

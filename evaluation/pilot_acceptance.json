@@ -1,7 +1,7 @@
 {
   "policy": "gs024-v1",
-  "candidate_commit": "e8d8be2d73b609ccde2c43e65e874d73253400b2",
-  "as_of": "2026-11-04",
+  "candidate_commit": "2ceb511a48f245f4a5486f3b4508ad515856ec85",
+  "as_of": "2026-11-05",
   "open_critical_defects": 0,
   "gates": [
     {
@@ -10,9 +10,9 @@
       "method": "automated",
       "data_kind": "synthetic",
       "reviewer": "GitHub Actions",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/41750142768",
-      "candidate_commit": "e8d8be2d73b609ccde2c43e65e874d73253400b2",
-      "note": "Published candidate Linux CI: 259 passed, 1 skipped. Docker OCR, PostgreSQL concurrency and service isolation passed. Local Chrome exercised PDF page lookup, duplicate amount selection, the saved unreviewed fact and its highlighted source."
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/41934325330",
+      "candidate_commit": "2ceb511a48f245f4a5486f3b4508ad515856ec85",
+      "note": "Published candidate Linux CI: 271 passed, 1 skipped, with Linux OCR verified in Docker. PostgreSQL concurrency, service isolation and encrypted recovery passed. Local Chrome exercised compact XLSX upload, job execution and worksheet range display."
     },
     {
       "id": "five_company_journey",
@@ -20,8 +20,8 @@
       "method": "automated",
       "data_kind": "synthetic",
       "reviewer": "GitHub Actions",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/41750142768",
-      "candidate_commit": "e8d8be2d73b609ccde2c43e65e874d73253400b2",
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/41934325330",
+      "candidate_commit": "2ceb511a48f245f4a5486f3b4508ad515856ec85",
       "note": "Candidate CI passed five synthetic PDF journeys through parser, review, snapshot, calculation, valuation and three exports. Real-company methodology remains pending."
     },
     {
@@ -30,14 +30,14 @@
       "method": "automated",
       "data_kind": "synthetic",
       "reviewer": "GitHub Actions",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/41750142768",
-      "candidate_commit": "e8d8be2d73b609ccde2c43e65e874d73253400b2",
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/41934325330",
+      "candidate_commit": "2ceb511a48f245f4a5486f3b4508ad515856ec85",
       "note": "Candidate CI restored encrypted synthetic data into a clean Docker project: 33 tables, four files and 15 HTTPS sessions. A saved PDF prefix resumed from page 26 with original locators. External media and field acceptance remain pending."
     },
     {
       "id": "source_coverage",
       "status": "pending",
-      "note": "Six SEC endpoints verified in GS-022. Analyst must confirm periods and metric coverage. English gaps for Sber and T-Technologies remain explicit."
+      "note": "30 official originals are inventoried across three foreign issuers. 24 working extractions are ready and six originals are reserved. Analyst confirmation of periods, metrics and gaps including native PPTX and English Russian-issuer coverage is pending."
     },
     {
       "id": "real_company_journey",
@@ -47,7 +47,7 @@
     {
       "id": "ai_quality",
       "status": "pending",
-      "note": "User approved corpus minimums and accuracy/precision/coverage targets on 2026-11-03. All three metrics remain N/A until the real blind holdout, its manifest and fact tolerances are reviewed and measured."
+      "note": "At corpus freeze, zero of 500 expected human labels are approved. Six private candidate documents require at least 100 reviewed holdout facts after overlapping periods and prior exposure are checked."
     },
     {
       "id": "remote_access",

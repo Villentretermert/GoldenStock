@@ -1,5 +1,7 @@
 # Публикация GitHub
 
+5 ноября 2026. Изменения GS-004/027 опубликованы в `2ceb511a48f245f4a5486f3b4508ad515856ec85`. [GitHub CI](https://github.com/Villentretermert/GoldenStock/actions/runs/41934325330) прошёл. Публичный реестр содержит 24 рабочих источника.
+
 4 ноября 2026. GS-026 опубликована в `e8d8be2d73b609ccde2c43e65e874d73253400b2`. [Проверки CI](https://github.com/Villentretermert/GoldenStock/actions/runs/41750142768) прошли.
 
 4 ноября 2026: GS-025 опубликована в `30a13ce62e3df279ec1ffcaf729bf95849d75494`, [CI](https://github.com/Villentretermert/GoldenStock/actions/runs/41737911751) прошёл. Полные PDF, извлечения и скриншоты остались локальными.

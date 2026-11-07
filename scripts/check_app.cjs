@@ -23,6 +23,51 @@ let browser;
  await page.getByLabel('Password',{exact:true}).fill(process.env.GS_QA_PASSWORD);
  await page.getByRole('button',{name:'Sign in',exact:true}).click();
  await page.getByRole('heading',{name:'Your watchlist',exact:true}).waitFor();
+ if(process.env.GS_QA_AI_WINDOW_PDF){
+   await page.goto(base+'/files?company_id=nu');
+   const name='synthetic-long-ai-page.pdf';
+   await page.getByLabel('Original file').setInputFiles({name,mimeType:'application/pdf',buffer:Buffer.from(process.env.GS_QA_AI_WINDOW_PDF,'base64')});
+   await page.getByRole('button',{name:'Upload private original'}).click();
+   const card=page.locator('div.card').filter({has:page.getByRole('heading',{name,exact:true})});
+   await card.waitFor();
+   for(const [role,title] of [['button','Extract English document'],['link','View extracted evidence']]){
+     const action=card.getByRole(role,{name:title,exact:true});
+     for(let attempt=0;attempt<40&&!await action.count();attempt++){
+       await page.reload({waitUntil:'networkidle'});
+       if(!await action.count())await new Promise(r=>setTimeout(r,750));
+     }
+     await action.click();
+   }
+   await page.getByRole('link',{name:'Preview AI evidence',exact:true}).first().click();
+   const previewText=await page.locator('.ai-source').allTextContents();
+   const next=await page.getByRole('link',{name:'Preview next fragment',exact:true}).getAttribute('href');
+   if(!next.includes('text_offset='))throw Error('No long-text continuation');
+   await page.screenshot({path:'design/previews/ai-window-desktop.png'});
+   await page.setViewportSize({width:390,height:900});
+   await page.screenshot({path:'design/previews/ai-window-mobile.png'});
+   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('AI preview overflow');
+   await page.setViewportSize({width:1440,height:1000});
+   await page.getByRole('button',{name:'Suggest metrics from this fragment',exact:true}).click();
+   await page.waitForURL('**/ai-run/*');
+   const key=new URL(page.url()).pathname.split('/').pop();
+   let run;
+   for(let attempt=0;attempt<120;attempt++){
+     run=await(await page.request.get(base+'/api/v1/ai/runs/'+key)).json();
+     if(['failed','cancelled'].includes(run.state))throw Error('Window inference failed: '+run.error);
+     if(run.state==='succeeded')break;
+     await new Promise(r=>setTimeout(r,1000));
+   }
+   if(run.state!=='succeeded')throw Error('Window inference timeout');
+   if(JSON.stringify(run.source_window.evidence.map(e=>e.text))!==JSON.stringify(previewText))throw Error('Saved source differs from preview');
+   if(!run.result.proposals.some(p=>p.metric==='profit'&&p.number_text==='120'))throw Error('Synthetic profit missing');
+   await page.reload({waitUntil:'networkidle'});
+   await page.getByRole('link',{name:'Preview next fragment',exact:true}).click();
+   if(page.url()!==base+next)throw Error('Wrong continuation');
+   if((await page.locator('.ai-source').allTextContents()).includes(previewText[0]))throw Error('Repeated first window');
+   await page.getByRole('link',{name:'Open full source item',exact:true}).first().click();
+   await page.getByRole('heading',{name:'Normalize evidence',exact:true}).waitFor();
+   console.log('AI window UI PASS: real local model on synthetic PDF, preview matches frozen input, next fragment, original, desktop/mobile.');
+ }
  if(process.env.GS_QA_WORKBOOK){
    await page.goto(base+'/files?company_id=jpm');
    const name='synthetic-compact-book.xlsx';
@@ -202,7 +247,8 @@ let browser;
  await page.setViewportSize({width:1440,height:1000});
  if(process.env.GS_QA_AI==='1'){
    await page.goto(base+'/ai/sber');
-   await page.getByRole('button',{name:'Suggest metrics',exact:true}).click();
+   await page.getByRole('button',{name:'Preview evidence',exact:true}).click();
+   await page.getByRole('button',{name:'Suggest metrics from this fragment',exact:true}).click();
    await page.waitForLoadState('networkidle');
    async function waitAI(kind){
      let result;

@@ -96,7 +96,7 @@ if('source_start' in values)values.source_start=Number(values.source_start);
 if('revision' in values)values.revision=Number(values.revision);body=JSON.stringify(values);headers['Content-Type']='application/json';}
 const response=await fetch(form.dataset.api,{method:form.dataset.method||'POST',headers,body});const result=await response.json();
 if(!response.ok)throw new Error(typeof result.detail==='string'?result.detail:'Please check the entered values');
-location.href=form.dataset.labDataset?'/lab/datasets/'+result.id:form.dataset.labExperiment?'/lab/experiments/'+result.id:form.dataset.valuation?'/valuations/'+result.id:form.dataset.calculation?'/calculations/'+result.id:(form.dataset.next||location.pathname+location.search);
+location.href=form.dataset.aiProposal?'/ai-run/'+result.id:form.dataset.labDataset?'/lab/datasets/'+result.id:form.dataset.labExperiment?'/lab/experiments/'+result.id:form.dataset.valuation?'/valuations/'+result.id:form.dataset.calculation?'/calculations/'+result.id:(form.dataset.next||location.pathname+location.search);
 }catch(error){message.textContent=error.message;message.scrollIntoView({block:'center'});}finally{if(button)button.disabled=false;}
 }));
 '''
@@ -184,7 +184,7 @@ def mount_ui(app):
             location=item['location']
             origin=' · '.join(f'{key.title()} {location[key]}' for key in ('page','slide','sheet','table','cell','row','column') if key in location)
             formula=f'<br>Formula: {e(item["formula"])} (cached value unverified)' if item.get('formula') else ''
-            body+=f'<tr><td>{e(origin)}</td><td style="white-space:pre-wrap">{e(value)}{formula}</td><td>{e(item["method"])} / {e(item["confidence"] if item["confidence"] is not None else "not scored")}<br><a href="/normalize/{e(job_id)}/{item_index}">Normalize</a></td></tr>'
+            body+=f'<tr><td>{e(origin)}</td><td style="white-space:pre-wrap">{e(value)}{formula}</td><td>{e(item["method"])} / {e(item["confidence"] if item["confidence"] is not None else "not scored")}<br><a href="/normalize/{e(job_id)}/{item_index}">Normalize</a><br><a href="/ai-evidence?job_id={e(job_id)}&amp;offset={item_index}">Preview AI evidence</a></td></tr>'
         body+='</tbody></table></div>'
         if offset:
             body+=f'<a href="/extraction/{e(job_id)}?offset={max(0,offset-100)}">Previous</a> '

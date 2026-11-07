@@ -3,7 +3,7 @@ import hashlib
 import json
 import secrets
 import time
-from fastapi import APIRouter,HTTPException,Request
+from fastapi import APIRouter,HTTPException,Request,Query
 from pydantic import BaseModel,ConfigDict,Field
 from sqlalchemy import select,func
 from sqlalchemy.orm import Session
@@ -13,6 +13,7 @@ from goldenstock.documents import authorized_job
 from goldenstock.inference import PROFILES,PROMPT_VERSION,OllamaProvider,InferenceError
 from goldenstock.knowledge import pack,retrieve
 from goldenstock.public_sources import snapshot as public_snapshot,evidence as public_evidence
+from goldenstock.ai_evidence import source_window
 
 router=APIRouter(prefix='/api/v1/ai')
 
@@ -30,6 +31,7 @@ class ProposalRequest(BaseModel):
     model_config=ConfigDict(extra='forbid')
     job_id: str=Field(max_length=32)
     offset: int=Field(default=0,ge=0,le=49999)
+    text_offset: int=Field(default=0,ge=0,le=16777216)
     profile: str='qwen4'
 
 
@@ -87,22 +89,31 @@ def profiles(request:Request):
 def proposals(data:ProposalRequest,request:Request):
     actor=authenticate(request,True)
     with Session(request.app.state.engine) as db,db.begin():
-        job=authorized_job(db,data.job_id,actor)
-        version=db.get(DocumentVersion,job.version_id)
-        if version.owner_id!=actor.id: raise HTTPException(404,'Private original not found')
-        extraction=db.get(Extraction,version.id)
-        if not extraction: raise HTTPException(409,'Extract the original first')
-        items=json.loads(extraction.payload)['items'];evidence=[];used=0
-        for index,item in enumerate(items[data.offset:data.offset+8],start=data.offset):
-            text=item.get('text') or ''
-            if not text.strip(): continue
-            entry=dict(id=f'{version.id}:{index}',text=text,location=item['location'],source_sha256=extraction.source_sha256)
-            size=len(json.dumps(entry))
-            if used+size>6000: break
-            evidence.append(entry);used+=size
-        if not evidence: raise HTTPException(422,'No bounded evidence at this offset; choose a smaller source item')
-        company=db.get(Document,version.document_id).company_id
-        return enqueue(db,actor,company,'proposals',data.profile,dict(evidence=evidence,version_id=version.id,job_id=job.id,offset=data.offset))
+        selected=proposal_source(db,actor,data.job_id,data.offset,data.text_offset)
+        if not selected['evidence']: raise HTTPException(422,'No text in this window; preview the next fragment')
+        return enqueue(db,actor,selected.pop('company_id'),'proposals',data.profile,selected)
+
+
+def proposal_source(db,actor,job_id,offset,text_offset):
+    job=authorized_job(db,job_id,actor)
+    version=db.get(DocumentVersion,job.version_id)
+    if version.owner_id!=actor.id: raise HTTPException(404,'Private original not found')
+    extraction=db.get(Extraction,version.id)
+    if not extraction: raise HTTPException(409,'Extract the original first')
+    try:
+        selected=source_window(json.loads(extraction.payload)['items'],version.id,
+                               extraction.source_sha256,offset,text_offset)
+    except ValueError as exc: raise HTTPException(422,str(exc)) from None
+    return dict(selected,version_id=version.id,job_id=job.id,
+                company_id=db.get(Document,version.document_id).company_id)
+
+
+@router.get('/proposal-evidence')
+def proposal_evidence(request:Request,job_id:str,offset:int=Query(0,ge=0,le=49999),
+                      text_offset:int=Query(0,ge=0,le=16777216)):
+    actor=authenticate(request)
+    with Session(request.app.state.engine) as db:
+        return proposal_source(db,actor,job_id,offset,text_offset)
 
 
 @router.get('/runs')
@@ -119,7 +130,9 @@ def run(run_id:str,request:Request):
         row=db.scalar(select(AIRun).where(private(actor),AIRun.id==run_id))
         if not row or row.kind.startswith('lab_'): raise HTTPException(404,'Run not found')
         result=view(row)
-        if row.kind=='summary':
+        if row.kind=='proposals':
+            result['source_window']=json.loads(row.input)
+        elif row.kind=='summary':
             payload=json.loads(row.input)
             result['current']=pack(db,actor,row.company_id)['state_hash']==payload['state_hash']
             result['as_of']=payload['as_of'];result['blocker_count']=payload['blocker_count']

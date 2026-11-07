@@ -54,3 +54,15 @@ def sparse_workbook_bytes():
     book.save(output)
     book.close()
     return output.getvalue()
+def long_ai_pdf():
+    """One synthetic native page that needs multiple bounded AI windows."""
+    import io
+    from reportlab.pdfgen import canvas
+    output = io.BytesIO()
+    pdf = canvas.Canvas(output, pagesize=(750, 1900))
+    pdf.setFont('Helvetica', 10)
+    pdf.drawString(30, 1860, 'For the year ended December 31, 2025, consolidated IFRS profit was USD 120 million.')
+    for line in range(115):
+        pdf.drawString(30, 1835-line*15, 'Synthetic narrative for interface testing. This line contains no additional financial metrics.')
+    pdf.save()
+    return output.getvalue()

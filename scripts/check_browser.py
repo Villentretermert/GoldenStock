@@ -47,6 +47,9 @@ def main():
         env=dict(os.environ,GS_QA_LOGIN=login,GS_QA_PASSWORD=password,GS_NODE_MODULES=str(runtime/'node_modules'),GS_APP_URL='http://127.0.0.1:8081')
         from extraction_fixtures import simple_pdf
         env['GS_QA_PDF']=base64.b64encode(simple_pdf()).decode('ascii')
+        if os.environ.get('GS_QA_AI_WINDOWS')=='1':
+            from extraction_fixtures import long_ai_pdf
+            env['GS_QA_AI_WINDOW_PDF']=base64.b64encode(long_ai_pdf()).decode('ascii')
         if os.environ.get('GS_QA_COMPACT_XLSX')=='1':
             from extraction_fixtures import sparse_workbook_bytes
             env['GS_QA_WORKBOOK']=base64.b64encode(sparse_workbook_bytes()).decode('ascii')

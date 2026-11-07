@@ -1,7 +1,7 @@
 {
   "policy": "gs024-v1",
-  "candidate_commit": "b06b9962f50edab78c966b310b39c15b911a2f78",
-  "as_of": "2026-11-07",
+  "candidate_commit": "1b2ce9d5f6dc5bbd6bc95d6a776ef0686f94d06b",
+  "as_of": "2026-11-08",
   "open_critical_defects": 0,
   "gates": [
     {
@@ -10,9 +10,9 @@
       "method": "automated",
       "data_kind": "synthetic",
       "reviewer": "GitHub Actions",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42397289892",
-      "candidate_commit": "b06b9962f50edab78c966b310b39c15b911a2f78",
-      "note": "Published candidate Linux CI: 277 passed, 1 skipped, with OCR verified in Docker. PostgreSQL, service isolation and encrypted recovery passed. Local Chrome verified a long synthetic PDF through the bounded AI preview, local Qwen, saved input and continuation on desktop/mobile."
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42426509690",
+      "candidate_commit": "1b2ce9d5f6dc5bbd6bc95d6a776ef0686f94d06b",
+      "note": "Published candidate Linux CI: 284 passed, 1 skipped; OCR verified in Docker. PostgreSQL, service isolation and encrypted recovery passed. Local Chrome plus Qwen verified a selected-page batch with two requests/results, exact saved source evidence and desktop/mobile UI. Real quality remains unmeasured."
     },
     {
       "id": "five_company_journey",
@@ -20,8 +20,8 @@
       "method": "automated",
       "data_kind": "synthetic",
       "reviewer": "GitHub Actions",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42397289892",
-      "candidate_commit": "b06b9962f50edab78c966b310b39c15b911a2f78",
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42426509690",
+      "candidate_commit": "1b2ce9d5f6dc5bbd6bc95d6a776ef0686f94d06b",
       "note": "Candidate CI passed five synthetic PDF journeys through parser, review, snapshot, calculation, valuation and three exports. Real-company methodology remains pending."
     },
     {
@@ -30,9 +30,9 @@
       "method": "automated",
       "data_kind": "synthetic",
       "reviewer": "GitHub Actions",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42397289892",
-      "candidate_commit": "b06b9962f50edab78c966b310b39c15b911a2f78",
-      "note": "Candidate CI restored encrypted synthetic data into a clean Docker project: 33 tables, four files and 15 HTTPS sessions. A saved PDF prefix resumed from page 26 with original locators. External media and field acceptance remain pending."
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42426509690",
+      "candidate_commit": "1b2ce9d5f6dc5bbd6bc95d6a776ef0686f94d06b",
+      "note": "Candidate CI restored encrypted synthetic data into a clean Docker project: schema 0017, 34 tables, four files and 15 HTTPS sessions. Saved PDF prefix resumed from page 26. Private AI batch manifest survived restore, access isolation and retry were verified. External media and field acceptance remain pending."
     },
     {
       "id": "source_coverage",

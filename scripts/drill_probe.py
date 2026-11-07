@@ -61,6 +61,16 @@ try:
     assert hashlib.sha256(admin.get(path).content).hexdigest() == receipt["template_sha"]
     knowledge = admin.get("/api/v1/knowledge/jpm/export").json()
     assert len(knowledge["facts"]) == 1 and knowledge["state_hash"] == receipt["knowledge_hash"]
+    batch_url='/api/v1/ai/batches/'+receipt['batch_id']
+    restored_batch=admin.get(batch_url);restored_batch.raise_for_status()
+    assert restored_batch.json()['manifest']==receipt['batch_manifest']
+    assert sessions[1][0].get(batch_url).status_code==404
+    assert admin.post(batch_url+'/retry').status_code==200
+    for _ in range(35):
+        restored_batch=admin.get(batch_url).json()
+        if restored_batch['completed']==restored_batch['total']: break
+        time.sleep(1)
+    assert restored_batch['counts']=={'failed':1}
     pending=receipt['pending_document']
     pending_url='/api/v1/jobs/'+pending['job_id']
     assert admin.get(pending_url).json()['progress']==dict(status='partial',completed_pages=25,total_pages=26)
@@ -93,7 +103,7 @@ try:
     timings = sorted(item[1] for item in sessions)
     print(json.dumps(dict(concurrent_accounts=len(sessions), scenario="HTTPS login, session and catalog",
                           p50_ms=round(timings[7]), p95_ms=round(timings[math.ceil(.95*15)-1]),
-                          original=True, template=True, reviewed_knowledge=True, pdf_checkpoint_resumed=True, revoked_session_denied=True,
+                          original=True, template=True, reviewed_knowledge=True, ai_batch_restored=True, pdf_checkpoint_resumed=True, revoked_session_denied=True,
                           old_session_denied=True, inference_outage_isolated=True)))
 finally:
     for session, _ in sessions:

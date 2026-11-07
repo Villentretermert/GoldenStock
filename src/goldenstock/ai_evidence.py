@@ -5,8 +5,9 @@ SELECTION_VERSION = 'gs028-source-window-v1'
 MAX_EVIDENCE_JSON = 6000
 
 
-def source_window(items, version_id, source_sha256, offset=0, text_offset=0):
-    if not 0 <= offset < len(items):
+def source_window(items, version_id, source_sha256, offset=0, text_offset=0, stop_offset=None):
+    stop = len(items) if stop_offset is None else stop_offset
+    if not 0 <= offset < stop <= len(items):
         raise ValueError('Evidence item not found')
     raw = items[offset].get('text') or ''
     if not 0 <= text_offset <= len(raw) or (text_offset == len(raw) and raw):
@@ -15,11 +16,11 @@ def source_window(items, version_id, source_sha256, offset=0, text_offset=0):
         raise ValueError('Text position must follow whitespace to preserve whole tokens')
     evidence = []
     cursor = None
-    for index in range(offset, min(offset + 8, len(items))):
+    for index in range(offset, min(offset + 8, stop)):
         item = items[index]
         text = item.get('text') or ''
         start = text_offset if index == offset else 0
-        cursor = dict(offset=index + 1, text_offset=0) if index + 1 < len(items) else None
+        cursor = dict(offset=index + 1, text_offset=0) if index + 1 < stop else None
         if not text[start:].strip():
             continue
 

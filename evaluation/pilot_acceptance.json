@@ -37,7 +37,7 @@
     {
       "id": "source_coverage",
       "status": "pending",
-      "note": "30 official originals are inventoried across three foreign issuers. 24 working extractions are ready and six originals are reserved. Analyst confirmation of periods, metrics and gaps including native PPTX and English Russian-issuer coverage is pending."
+      "note": "30 official originals across three foreign issuers: 24 working extractions and six reserved originals. Analyst confirmation of periods, metrics and English Russian-issuer gaps is pending. On 2026-11-08 the user deferred native PPTX to a separate later example; this does not reduce the 30/500 corpus or 6/100 holdout requirements."
     },
     {
       "id": "real_company_journey",
@@ -67,7 +67,7 @@
     {
       "id": "daily_workload",
       "status": "pending",
-      "note": "Measure 45 real documents per day, summary latency including queue time, 3 GiB free VRAM and the full report-to-reviewed-export target of 10 minutes. None is a demonstrated workload SLA yet."
+      "note": "Measure 45 real documents/day, summary latency including queue time and 3 GiB free VRAM. The ten-minute target applies to updating an existing ready model across all nine banking metrics, including manual review and export; initial construction is measured separately. None is a demonstrated workload SLA yet."
     },
     {
       "id": "fund_signoff",

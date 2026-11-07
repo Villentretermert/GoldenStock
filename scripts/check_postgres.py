@@ -201,6 +201,29 @@ def main():
                     assert sorted(r.status_code for r in annotations)==[201,409]
                 assert client.post('/api/v1/lab/experiments/'+lab_id+'/reveal').status_code==200
                 print('AI Lab PostgreSQL PASS: concurrent dataset/experiment deduplication, global GPU lease, annotation revision fencing and reveal.')
+                batch_args=dict(job_id=receipt['job_id'],page_start=1,page_end=1,profile='qwen4')
+                batch_preview=client.get('/api/v1/ai/batches/preview',params=batch_args)
+                assert batch_preview.status_code==200,batch_preview.text
+                batch_args['plan_hash']=batch_preview.json()['plan_hash']
+                with ThreadPoolExecutor(max_workers=3) as pool:
+                    batches=list(pool.map(lambda _:client.post('/api/v1/ai/batches',json=batch_args),range(3)))
+                assert all(r.status_code==201 for r in batches),[r.text for r in batches]
+                assert len({r.json()['id'] for r in batches})==1
+                batch_id=batches[0].json()['id'];batch_url='/api/v1/ai/batches/'+batch_id
+                entered.clear();release.clear();calls.clear()
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    first=pool.submit(process_ai,app.state.engine,settings,Provider())
+                    assert entered.wait(10)
+                    assert client.post(batch_url+'/cancel').status_code==200
+                    assert client.post(batch_url+'/retry').status_code==409
+                    assert process_ai(app.state.engine,settings,Provider()) is False
+                    release.set();assert first.result()
+                result=client.get(batch_url).json()
+                assert result['counts']=={'cancelled':1} and len(calls)==1
+                assert client.post(batch_url+'/retry').status_code==200
+                assert process_ai(app.state.engine,settings,Provider())
+                assert client.get(batch_url).json()['state']=='succeeded'
+                print('AI batch PostgreSQL PASS: concurrent atomic creation, cancellation lease, no overlapping provider and retry.')
                 from goldenstock.monitoring import process_monitor
                 from goldenstock.models import MonitorSource,MonitorEvent,SiteNotification
                 assert client.put('/api/v1/favorites/jpm').status_code==200

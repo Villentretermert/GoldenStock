@@ -120,7 +120,7 @@ def proposal_evidence(request:Request,job_id:str,offset:int=Query(0,ge=0,le=4999
 def runs(request:Request,company_id:str):
     actor=authenticate(request)
     with Session(request.app.state.engine) as db:
-        return [view(r) for r in db.scalars(select(AIRun).where(private(actor),~AIRun.kind.startswith('lab_'),AIRun.company_id==company_id).order_by(AIRun.created.desc()).limit(50))]
+        return [view(r) for r in db.scalars(select(AIRun).where(private(actor),~AIRun.kind.startswith('lab_'),~AIRun.kind.startswith('batch_'),AIRun.company_id==company_id).order_by(AIRun.created.desc()).limit(50))]
 
 
 @router.get('/runs/{run_id}')
@@ -130,7 +130,7 @@ def run(run_id:str,request:Request):
         row=db.scalar(select(AIRun).where(private(actor),AIRun.id==run_id))
         if not row or row.kind.startswith('lab_'): raise HTTPException(404,'Run not found')
         result=view(row)
-        if row.kind=='proposals':
+        if row.kind in {'proposals','batch_proposals'}:
             result['source_window']=json.loads(row.input)
         elif row.kind=='summary':
             payload=json.loads(row.input)
@@ -148,7 +148,7 @@ def control(run_id:str,action:str,request:Request):
     with Session(request.app.state.engine) as db,db.begin():
         db.scalar(select(Company).where(Company.id=='sber').with_for_update())
         row=db.scalar(select(AIRun).where(private(actor),AIRun.id==run_id).with_for_update())
-        if not row or row.kind.startswith('lab_'): raise HTTPException(404,'Run not found')
+        if not row or row.kind.startswith(('lab_','batch_')): raise HTTPException(404,'Run not found')
         if action=='cancel' and row.state in {'queued','running'}:
             row.state='cancelled' # Keep the lease until the provider returns; no overlapping GPU work.
         elif action=='retry' and row.state in {'failed','cancelled'} and row.lease_until<=time.time():
@@ -177,6 +177,9 @@ def process_ai(engine,settings,provider=None):
     output={};error=''
     try:
         adapter=provider or OllamaProvider(settings)
+        if kind=='batch_proposals':
+            from goldenstock.ai_batches import validate_batch_input
+            validate_batch_input(payload,profile,engine,actor,key)
         if kind.startswith('lab_'):
             from goldenstock.ai_lab import validate_lab_input
             validate_lab_input(payload,profile)

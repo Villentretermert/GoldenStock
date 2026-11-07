@@ -14,6 +14,7 @@ from goldenstock.sources import router as sources_router
 from goldenstock.facts import router as facts_router
 from goldenstock.reviews import router as reviews_router
 from goldenstock.ai_runs import router as ai_router
+from goldenstock.ai_batches import router as batch_router
 from goldenstock.knowledge import router as knowledge_router
 from goldenstock.public_sources import router as public_router
 from goldenstock.templates import router as templates_router
@@ -49,6 +50,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(facts_router)
     app.include_router(reviews_router)
     app.include_router(ai_router)
+    app.include_router(batch_router)
     app.include_router(knowledge_router)
     app.include_router(public_router)
     app.include_router(templates_router)

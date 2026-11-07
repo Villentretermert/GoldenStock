@@ -24,7 +24,9 @@ def mount_ai_ui(app):
         if collapsed:
             body='<details><summary>Saved source fragment</summary>'+body+'</details>'
         cursor=selected.get('next_cursor')
-        if cursor:
+        if selected.get('batch_id'):
+            body+=f'<p><a href="/ai-batch/{e(selected["batch_id"])}">Back to selected-page batch</a></p>'
+        elif cursor:
             body+=f'<p><a href="/ai-evidence?job_id={e(selected["job_id"])}&amp;offset={cursor["offset"]}&amp;text_offset={cursor["text_offset"]}">Preview next fragment</a></p>'
         elif selected.get('selection_version'):
             body+='<p>End of extracted text.</p>'
@@ -54,6 +56,13 @@ def mount_ai_ui(app):
             jobs=list(db.execute(select(Job,DocumentVersion).join(DocumentVersion,Job.version_id==DocumentVersion.id).join(Document,Document.id==DocumentVersion.document_id).join(Extraction,Extraction.version_id==DocumentVersion.id).where(Document.org_id==actor.org_id,Document.owner_id==actor.id,Document.company_id==company_id).order_by(DocumentVersion.created.desc()).limit(50)))
         fields='<label>Extracted original<select name="job_id" required>'+''.join(f'<option value="{e(j.id)}">{e(v.filename)} · v{v.number}</option>' for j,v in jobs)+'</select></label><label>Evidence offset<input type="number" name="offset" min="0" max="49999" value="0" required></label>'
         body+='<form method="get" action="/ai-evidence">'+fields+'<button>Preview evidence</button></form>'
+        body+='<h2>Selected PDF pages</h2><p>Preview up to 25 original pages and 10 AI requests. The batch runs through the same local queue.</p>'
+        pdfs=''.join(f'<option value="{e(j.id)}">{e(v.filename)} · v{v.number}</option>' for j,v in jobs if v.filename.lower().endswith('.pdf'))
+        body+='<form method="get" action="/ai-batch-preview"><label>PDF original<select name="job_id" required>'+pdfs+'</select></label><label>First original page<input name="page_start" type="number" min="1" max="1000" value="1" required></label><label>Last original page<input name="page_end" type="number" min="1" max="1000" value="1" required></label>'+profiles()+'<button>Preview page batch</button></form>'
+        from goldenstock.ai_batches import listing
+        batches=listing(request,company_id)
+        if batches:
+            body+='<h2>Recent page batches</h2>'+''.join(f'<p><a href="/ai-batch/{e(b["id"])}">Open page batch {e(b["id"][:8])}</a></p>' for b in batches)
         body+='<h2>Company summary</h2><p>Uses your confirmed private facts. Missing data remains a gap.</p>'
         body+=form('/api/v1/ai/summaries','Create summary',hidden('company_id',company_id)+profiles())
         body+='<h2>Public SEC research</h2><p>For JPMorgan, HSBC and Nu: fetch supported public XBRL metrics, then create an unreviewed summary. A deployment contact email is required. This covers selected recent metrics, not all reports or periods.</p>'
@@ -69,8 +78,9 @@ def mount_ai_ui(app):
         if not actor: return RedirectResponse('/login',status_code=303)
         data=run(run_id,request);output=data['result']
         body=f'<h1>AI task</h1><p>{e(data["kind"])} · {e(data["state"])} · attempts {data["attempts"]}</p><p>{e(data["error"])}</p><a href="/ai/{e(data["company_id"])}">Back to AI workspace</a>'
-        if data['state'] in {'queued','running'}: body+=form(f'/api/v1/ai/runs/{run_id}/cancel','Cancel task')
-        if data['state'] in {'failed','cancelled'}: body+=form(f'/api/v1/ai/runs/{run_id}/retry','Retry task')
+        if data['kind']!='batch_proposals':
+            if data['state'] in {'queued','running'}: body+=form(f'/api/v1/ai/runs/{run_id}/cancel','Cancel task')
+            if data['state'] in {'failed','cancelled'}: body+=form(f'/api/v1/ai/runs/{run_id}/retry','Retry task')
         if data.get('source_window'):
             body+=source_cards(data['source_window'],collapsed=True)
         if data['state']=='succeeded':

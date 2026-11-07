@@ -23,6 +23,57 @@ let browser;
  await page.getByLabel('Password',{exact:true}).fill(process.env.GS_QA_PASSWORD);
  await page.getByRole('button',{name:'Sign in',exact:true}).click();
  await page.getByRole('heading',{name:'Your watchlist',exact:true}).waitFor();
+ if(process.env.GS_QA_AI_BATCH_PDF){
+   await page.goto(base+'/files?company_id=nu');
+   const name='synthetic-selected-pages.pdf';
+   await page.getByLabel('Original file').setInputFiles({name,mimeType:'application/pdf',buffer:Buffer.from(process.env.GS_QA_AI_BATCH_PDF,'base64')});
+   await page.getByRole('button',{name:'Upload private original'}).click();
+   const card=page.locator('div.card').filter({has:page.getByRole('heading',{name,exact:true})});
+   await card.waitFor();
+   for(const [role,title] of [['button','Extract English document'],['link','View extracted evidence']]){
+     const action=card.getByRole(role,{name:title,exact:true});
+     for(let attempt=0;attempt<40&&!await action.count();attempt++){
+       await page.reload({waitUntil:'networkidle'});
+       if(!await action.count())await new Promise(r=>setTimeout(r,750));
+     }
+     await action.click();
+   }
+   await page.goto(base+'/ai/nu');
+   await page.getByLabel('First original page',{exact:true}).fill('2');
+   await page.getByLabel('Last original page',{exact:true}).fill('3');
+   await page.getByRole('button',{name:'Preview page batch',exact:true}).click();
+   await page.getByText('2 AI requests',{exact:false}).waitFor();
+   if((await page.locator('main').innerText()).includes('Excluded cover'))throw Error('Batch contains outside page');
+   await page.locator('details summary').first().click();
+   await page.screenshot({path:'design/previews/ai-batch-preview.png'});
+   await page.setViewportSize({width:390,height:900});
+   await page.screenshot({path:'design/previews/ai-batch-preview-mobile.png'});
+   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Batch preview overflow');
+   await page.setViewportSize({width:1440,height:1000});
+   await page.getByRole('button',{name:'Start selected-page batch',exact:true}).click();
+   await page.waitForURL('**/ai-batch/*');
+   const key=new URL(page.url()).pathname.split('/').pop();let batch;
+   for(let attempt=0;attempt<180;attempt++){
+     batch=await(await page.request.get(base+'/api/v1/ai/batches/'+key)).json();
+     if(batch.completed===batch.total)break;
+     await new Promise(r=>setTimeout(r,1000));
+   }
+   if(batch.state!=='succeeded'||batch.total!==2)throw Error('Batch failed: '+JSON.stringify(batch.runs));
+   for(const part of batch.runs){
+     const run=await(await page.request.get(base+'/api/v1/ai/runs/'+part.run_id)).json();
+     if(run.source_window.evidence.some(e=>![2,3].includes(e.location.page)))throw Error('Wrong page reached AI');
+     if(!run.result.proposals.length)throw Error('Synthetic part has no proposals');
+   }
+   await page.reload({waitUntil:'networkidle'});
+   await page.screenshot({path:'design/previews/ai-batch-result.png'});
+   await page.setViewportSize({width:390,height:900});
+   await page.screenshot({path:'design/previews/ai-batch-result-mobile.png'});
+   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Batch result overflow');
+   await page.setViewportSize({width:1440,height:1000});
+   await page.getByRole('link',{name:'Part 1',exact:true}).click();
+   await page.getByRole('link',{name:'Back to selected-page batch',exact:true}).waitFor();
+   console.log('AI batch UI PASS: selected pages only, two local Qwen calls, frozen sources, progress and desktop/mobile.');
+ }
  if(process.env.GS_QA_AI_WINDOW_PDF){
    await page.goto(base+'/files?company_id=nu');
    const name='synthetic-long-ai-page.pdf';

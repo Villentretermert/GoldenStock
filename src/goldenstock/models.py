@@ -214,6 +214,21 @@ class AIRun(Base):
     created: Mapped[float]=mapped_column(Float,default=time.time)
 
 
+class AIProposalBatch(Base):
+    """Private immutable manifest grouping bounded AIRun inputs."""
+    __tablename__='ai_proposal_batches'
+    __table_args__=(UniqueConstraint('owner_id','fingerprint'),)
+    id: Mapped[str]=mapped_column(String(32),primary_key=True,default=new_id)
+    org_id: Mapped[str]=mapped_column(ForeignKey('organizations.id'),index=True)
+    owner_id: Mapped[str]=mapped_column(ForeignKey('users.id'))
+    company_id: Mapped[str]=mapped_column(ForeignKey('companies.id'))
+    version_id: Mapped[str]=mapped_column(ForeignKey('document_versions.id'))
+    fingerprint: Mapped[str]=mapped_column(String(64))
+    manifest: Mapped[str]=mapped_column(Text)
+    manifest_hash: Mapped[str]=mapped_column(String(64))
+    created: Mapped[float]=mapped_column(Float,default=time.time)
+
+
 class LabDataset(Base):
     """Immutable reference labels and inputs; a revision creates a new row."""
     __tablename__='lab_datasets'

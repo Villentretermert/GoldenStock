@@ -51,6 +51,13 @@ with TestClient(app) as client:
     template.raise_for_status()
     knowledge = client.get("/api/v1/knowledge/jpm/export").json()
     assert len(knowledge["facts"]) == 1
+    batch_args=dict(job_id=original['job_id'],page_start=1,page_end=1,profile='qwen4')
+    planned=client.get('/api/v1/ai/batches/preview',params=batch_args);planned.raise_for_status()
+    batch=client.post('/api/v1/ai/batches',json=batch_args|dict(plan_hash=planned.json()['plan_hash']))
+    batch.raise_for_status();batch_id=batch.json()['id']
+    stopped=client.post('/api/v1/ai/batches/'+batch_id+'/cancel')
+    assert stopped.status_code in (200,409)
+    batch_manifest=client.get('/api/v1/ai/batches/'+batch_id).json()['manifest']
     # A cancelled long-PDF prefix must survive backup and resume on the clean server.
     import io
     from reportlab.pdfgen import canvas
@@ -76,6 +83,6 @@ with TestClient(app) as client:
             source_sha256=version.sha256,completed_pages=25,total_pages=26,payload=encoded,
             payload_sha256=hashlib.sha256(encoded.encode()).hexdigest()))
     print(json.dumps(dict(document=original, template=template.json(), knowledge_hash=knowledge["state_hash"],
-                          pending_document=pending,
+                          pending_document=pending,batch_id=batch_id,batch_manifest=batch_manifest,
                           template_sha=hashlib.sha256(demo.content).hexdigest(),
                           old_session=client.cookies.get("gs_session"))))

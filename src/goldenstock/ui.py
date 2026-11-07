@@ -96,7 +96,7 @@ if('source_start' in values)values.source_start=Number(values.source_start);
 if('revision' in values)values.revision=Number(values.revision);body=JSON.stringify(values);headers['Content-Type']='application/json';}
 const response=await fetch(form.dataset.api,{method:form.dataset.method||'POST',headers,body});const result=await response.json();
 if(!response.ok)throw new Error(typeof result.detail==='string'?result.detail:'Please check the entered values');
-location.href=form.dataset.aiProposal?'/ai-run/'+result.id:form.dataset.labDataset?'/lab/datasets/'+result.id:form.dataset.labExperiment?'/lab/experiments/'+result.id:form.dataset.valuation?'/valuations/'+result.id:form.dataset.calculation?'/calculations/'+result.id:(form.dataset.next||location.pathname+location.search);
+location.href=form.dataset.aiBatch?'/ai-batch/'+result.id:form.dataset.aiProposal?'/ai-run/'+result.id:form.dataset.labDataset?'/lab/datasets/'+result.id:form.dataset.labExperiment?'/lab/experiments/'+result.id:form.dataset.valuation?'/valuations/'+result.id:form.dataset.calculation?'/calculations/'+result.id:(form.dataset.next||location.pathname+location.search);
 }catch(error){message.textContent=error.message;message.scrollIntoView({block:'center'});}finally{if(button)button.disabled=false;}
 }));
 '''
@@ -149,6 +149,8 @@ def mount_ui(app):
     mount_templates_ui(app)
     from goldenstock.ai_ui import mount_ai_ui
     mount_ai_ui(app)
+    from goldenstock.ai_batches_ui import mount_batch_ui
+    mount_batch_ui(app)
     from goldenstock.facts_ui import mount_facts_ui
     mount_facts_ui(app)
     from goldenstock.review_ui import mount_review_ui
@@ -176,6 +178,8 @@ def mount_ui(app):
             body+='</ul></details>'
         if result['filename'].lower().endswith('.pdf'):
             body+='<form method="get"><label>Original PDF page<input name="pdf_page" type="number" min="1" required></label><button>Go to page</button></form>'
+            chosen_page=pdf_page or 1
+            body+=f'<p><a href="/ai-batch-preview?job_id={e(job_id)}&amp;page_start={chosen_page}&amp;page_end={chosen_page}">Preview this page as an AI batch</a></p>'
         if pdf_page is not None and not result['items']:
             return page('Extracted evidence',body+f'<p>No extracted evidence on original page {pdf_page}.</p>',actor)
         body+='<div class="table-wrap"><table><thead><tr><th>Origin</th><th>Raw value</th><th>Method / confidence</th></tr></thead><tbody>'

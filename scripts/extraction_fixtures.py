@@ -66,3 +66,19 @@ def long_ai_pdf():
         pdf.drawString(30, 1835-line*15, 'Synthetic narrative for interface testing. This line contains no additional financial metrics.')
     pdf.save()
     return output.getvalue()
+
+
+def batch_ai_pdf():
+    """Two long statement pages and a cover that must stay outside the AI batch."""
+    from reportlab.pdfgen import canvas
+    output=io.BytesIO();pdf=canvas.Canvas(output,pagesize=(750,1300))
+    pdf.drawString(30,1250,'Excluded cover. Synthetic assets USD 999 million.')
+    pdf.showPage()
+    for statement in (
+        'For the year ended December 31, 2025, consolidated IFRS profit was USD 120 million.',
+        'As of December 31, 2025, consolidated IFRS total equity was USD 900 million.'):
+        pdf.setFont('Helvetica',10);pdf.drawString(30,1250,statement)
+        for line in range(48):
+            pdf.drawString(30,1220-line*20,'Synthetic narrative for interface testing. This line contains no additional financial metrics.')
+        pdf.showPage()
+    pdf.save();return output.getvalue()

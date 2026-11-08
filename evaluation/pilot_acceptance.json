@@ -1,6 +1,6 @@
 {
   "policy": "gs024-v1",
-  "candidate_commit": "d3319b0ebfc3af2946a2f95fdd2cb8ab713906cb",
+  "candidate_commit": "58136f0b42073cd71ee565df02b238965804bd0a",
   "as_of": "2026-11-08",
   "open_critical_defects": 0,
   "gates": [
@@ -10,9 +10,9 @@
       "method": "automated",
       "data_kind": "synthetic",
       "reviewer": "GitHub Actions",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42430313451",
-      "candidate_commit": "d3319b0ebfc3af2946a2f95fdd2cb8ab713906cb",
-      "note": "Published candidate Linux CI: 289 passed, 1 skipped; OCR including a scanned section title and word locators verified in Docker. PostgreSQL, service isolation and encrypted recovery passed. Local Chrome plus Qwen verified named section selection, frozen separate context, source links, legacy batches and desktop/mobile. Nullable context-field completion was not successful in the synthetic diagnostic and is not claimed."
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42500401750",
+      "candidate_commit": "58136f0b42073cd71ee565df02b238965804bd0a",
+      "note": "Published candidate Linux CI: 306 passed, 1 skipped; OCR verified separately in Docker. PostgreSQL, service isolation and encrypted recovery passed. Local Chrome verified explicit CPU with real Qwen and zero VRAM, GPU page batches with frozen context, desktop/mobile and 15 baseline scenarios. Context diagnostic remains qualityPassed=false."
     },
     {
       "id": "five_company_journey",
@@ -20,8 +20,8 @@
       "method": "automated",
       "data_kind": "synthetic",
       "reviewer": "GitHub Actions",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42430313451",
-      "candidate_commit": "d3319b0ebfc3af2946a2f95fdd2cb8ab713906cb",
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42500401750",
+      "candidate_commit": "58136f0b42073cd71ee565df02b238965804bd0a",
       "note": "Candidate CI passed five synthetic PDF journeys through parser, review, snapshot, calculation, valuation and three exports. Real-company methodology remains pending."
     },
     {
@@ -30,9 +30,9 @@
       "method": "automated",
       "data_kind": "synthetic",
       "reviewer": "GitHub Actions",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42430313451",
-      "candidate_commit": "d3319b0ebfc3af2946a2f95fdd2cb8ab713906cb",
-      "note": "Candidate CI restored encrypted synthetic data into a clean Docker project: schema 0017, 34 tables, four files and 15 HTTPS sessions. PDF resumed from page 26; a private AI batch with the context contract survived restore, access isolation and retry. External media and field acceptance remain pending."
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42500401750",
+      "candidate_commit": "58136f0b42073cd71ee565df02b238965804bd0a",
+      "note": "Candidate CI restored schema 0018, 35 tables and four files to a clean Docker project, with 15 HTTPS sessions. Private AI execution history and batch manifests matched; explicit CPU and isolated inference outage were checked. PDF resumed from page 26. External media and field acceptance remain pending."
     },
     {
       "id": "source_coverage",
@@ -47,7 +47,7 @@
     {
       "id": "ai_quality",
       "status": "pending",
-      "note": "At corpus freeze, zero of 500 expected human labels are approved. Six private candidate documents need at least 100 reviewed holdout facts after exposure checks. GS-030 synthetic Qwen diagnostic delivered separate context but left currency, scale and period null; this remains a quality gap, not a passed gold case."
+      "note": "At corpus freeze, zero of 500 expected human labels are approved. Six private candidate documents need at least 100 reviewed holdout facts after exposure checks. GS-030 synthetic Qwen diagnostic delivered separate context but left currency, scale and period null; this remains a quality gap, not a passed gold case. Under GS-031 execution settings nearby context citations may also be empty; technical UI checks do not count as quality acceptance."
     },
     {
       "id": "remote_access",
@@ -67,7 +67,7 @@
     {
       "id": "daily_workload",
       "status": "pending",
-      "note": "Measure 45 real documents/day, summary latency including queue time and 3 GiB free VRAM. The ten-minute target applies to updating an existing ready model across all nine banking metrics, including manual review and export; initial construction is measured separately. None is a demonstrated workload SLA yet."
+      "note": "Measure 45 real documents/day, summary latency including queue time and 3 GiB free VRAM. The ten-minute target applies to updating an existing ready model across all nine banking metrics, including manual review and export; initial construction is measured separately. None is a demonstrated workload SLA yet. GS-031 admission and periodic measurements are implemented. The short synthetic GPU test retained at least 6484 MiB free, and CPU placement was verified; this is not acceptance of user workload or an exclusive VRAM reservation."
     },
     {
       "id": "fund_signoff",

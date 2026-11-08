@@ -23,6 +23,7 @@ from goldenstock.valuations import router as valuations_router
 from goldenstock.exports import router as exports_router
 from goldenstock.ai_lab import router as lab_router
 from goldenstock.lab_exchange import router as exchange_router
+from goldenstock.monitor_history import router as monitor_history_router
 from goldenstock.monitoring import router as monitoring_router
 from starlette.middleware.body_limit import RequestBodyLimitMiddleware
 from goldenstock.auth import hash_password
@@ -60,6 +61,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(exports_router)
     app.include_router(lab_router)
     app.include_router(exchange_router)
+    app.include_router(monitor_history_router)
     app.include_router(monitoring_router)
     app.add_middleware(RequestBodyLimitMiddleware,max_body_size=settings.max_file_bytes+65536)
 

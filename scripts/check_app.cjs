@@ -657,7 +657,7 @@ let browser;
    for(const s of sources){const source=await page.request.get(base+'/api/v1/monitor-snapshots/'+s.snapshot_id+'/download');if(source.status()!==200)throw Error('Source snapshot download failed');}
    await page.reload({waitUntil:'networkidle'});
    await page.screenshot({path:'design/previews/monitor-live.png',fullPage:true});
-   console.log(JSON.stringify({monitoring:'six live SEC sources passed',sources:sources.map(s=>({id:s.id,known_items:s.known_items}))}));
+   console.log(JSON.stringify({monitoring:'six retained SEC sources available; fresh polling depends on schedule',sources:sources.map(s=>({id:s.id,known_items:s.known_items}))}));
  }
  await page.getByRole('link',{name:'Team',exact:true}).click();
  await page.getByRole('heading',{name:'Team accounts'}).waitFor();

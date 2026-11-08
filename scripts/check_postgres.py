@@ -268,10 +268,17 @@ def main():
                 with ThreadPoolExecutor(max_workers=3) as pool: monitor_results=list(pool.map(monitor_once,range(3)))
                 assert monitor_results.count(True)==1 and len(monitor_calls)==2
                 feed=client.get('/api/v1/notifications').json()['items'];assert len(feed)==1 and feed[0]['kind']=='possible_revision'
+                history_url='/api/v1/monitoring/jpm-facts/history/'+feed[0]['item_key']
+                versions=client.get(history_url).json()['items']
+                assert [v['value']['value'] for v in versions]==['110','100'] and [v['revision'] for v in versions]==[2,1]
+                assert feed[0]['comparison']['percent']=='10.00' and feed[0]['comparison']['significant']
+                with Session(app.state.engine) as db,db.begin(): db.get(MonitorSource,'jpm-facts').next_check=0
+                with ThreadPoolExecutor(max_workers=3) as pool: repeated=list(pool.map(monitor_once,range(3)))
+                assert repeated.count(True)==1 and client.get(history_url).json()['items']==versions
                 with ThreadPoolExecutor(max_workers=3) as pool:
                     read_results=list(pool.map(lambda _:client.post('/api/v1/notifications/'+feed[0]['id']+'/read'),range(3)))
                 assert all(r.status_code==200 for r in read_results) and len({r.json()['read_at'] for r in read_results})==1
-                print('Monitoring PostgreSQL PASS: one concurrent source request, atomic revision delivery, no duplicate notifications and idempotent private read state.')
+                print('Monitoring PostgreSQL PASS: one concurrent source request, immutable source history, exact comparison, atomic delivery and idempotent private read state.')
                 demo=client.get('/api/v1/templates/demo').content
                 def template_upload(key,template_id=''):
                     return client.post('/api/v1/templates',headers={'Idempotency-Key':key},

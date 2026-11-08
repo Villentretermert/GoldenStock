@@ -89,7 +89,7 @@ def test_revision_decimal_units_periods_and_old_response(workspace):
         stored=json.loads(db.scalar(select(MonitorObservation).where(MonitorObservation.source_id=='jpm-facts')).payload)
         assert stored['value']=='110'
     tick(app,'facts',facts(130,unit='EUR'),NOW+4*INTERVAL)
-    assert items(a)[0]['kind']=='new_metric_period'
+    assert a.get('/api/v1/notifications?category=periods').json()['items'][0]['kind']=='new_metric_period'
     assert number(Decimal('12345678901234567890.123456789012345678'))=='12345678901234567890.123456789012345678'
 
 

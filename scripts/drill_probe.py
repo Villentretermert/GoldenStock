@@ -67,6 +67,10 @@ try:
     assert hashlib.sha256(admin.get(import_url+'/original').content).hexdigest()==labels['original_sha']
     assert sessions[1][0].get(import_url).status_code==404 and sessions[1][0].get(import_url+'/original').status_code==404
     assert admin.post(import_url+'/confirm',json=labels['confirmation']).json()['fingerprint']==labels['fingerprint']
+    assert admin.get(receipt['monitor_history_url']).json()==receipt['monitor_history']
+    assert admin.get('/api/v1/notifications?category=revisions').json()['items']==[receipt['monitor_update']]
+    assert sessions[1][0].get('/api/v1/notifications').json()['items']==[]
+    assert sessions[1][0].post('/api/v1/notifications/'+receipt['monitor_update']['id']+'/read').status_code==404
     batch_url='/api/v1/ai/batches/'+receipt['batch_id']
     restored_batch=admin.get(batch_url);restored_batch.raise_for_status()
     assert restored_batch.json()['manifest']==receipt['batch_manifest']
@@ -131,7 +135,7 @@ try:
     timings = sorted(item[1] for item in sessions)
     print(json.dumps(dict(concurrent_accounts=len(sessions), scenario="HTTPS login, session and catalog",
                           p50_ms=round(timings[7]), p95_ms=round(timings[math.ceil(.95*15)-1]),
-                          original=True, template=True, reviewed_knowledge=True, lab_exchange_restored=True, ai_batch_restored=True, ai_execution_history_restored=True, explicit_cpu=True, pdf_checkpoint_resumed=True, revoked_session_denied=True,
+                          original=True, template=True, reviewed_knowledge=True, lab_exchange_restored=True, sec_history_restored=True, ai_batch_restored=True, ai_execution_history_restored=True, explicit_cpu=True, pdf_checkpoint_resumed=True, revoked_session_denied=True,
                           old_session_denied=True, inference_outage_isolated=True)))
 finally:
     for session, _ in sessions:

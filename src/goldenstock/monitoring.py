@@ -4,13 +4,14 @@ import json
 import time
 from fastapi import APIRouter,HTTPException,Request
 from fastapi.responses import Response
-from sqlalchemy import select,func
+from sqlalchemy import select,func,case
 from sqlalchemy.orm import Session
 from goldenstock.auth import authenticate,audit
 from goldenstock.models import (Company,Favorite,User,MonitorSource,MonitorSnapshot,
     MonitorObservation,MonitorEvent,SiteNotification)
 from goldenstock.public_sources import fetch,CIKS
 from goldenstock.monitor_index import index,semantic,encode,sha,POLICY
+from goldenstock.monitor_history import record,compare,identity
 
 router=APIRouter(prefix='/api/v1')
 INTERVAL=6*3600
@@ -65,15 +66,23 @@ def process_monitor(engine,settings,fetcher=None,now=None):
             if source.kind=='facts' and before and (after['filed'],after['accession'])<(before['filed'],before['accession']):
                 continue  # An older upstream response cannot revert the latest disclosure.
             changed=before is None or semantic(source.kind,before)!=semantic(source.kind,after)
+            version=None
+            if source.kind=='facts':
+                reason='baseline' if baseline else 'new_metric_period' if before is None else 'possible_revision' if changed else 'source_refresh'
+                version=record(db,source,key,snapshot,after,old,reason,now)
             if changed and not baseline:
                 if source.kind=='submissions':
                     kind='filing_metadata_changed' if before else 'amended_filing' if after['form'].endswith('/A') else 'new_filing'
                     if '4.02' in after.get('items',''): kind='nonreliance_disclosure'
                 else: kind='possible_revision' if before else 'new_metric_period'
-                deliver(db,source,kind,sha([key,semantic(source.kind,after)]),
-                    dict(before=before,after=after,before_snapshot_id=old.snapshot_id if old else None,after_snapshot_id=snapshot.id),now)
-            if not old: db.add(MonitorObservation(source_id=source.id,item_key=key,payload=encode(after),snapshot_id=snapshot.id))
-            else: old.payload=encode(after);old.snapshot_id=snapshot.id
+                fingerprint=sha(['gs033-v1',key,version.id]) if version else sha([key,semantic(source.kind,after)])
+                deliver(db,source,kind,fingerprint,
+                    dict(before=before,after=after,before_snapshot_id=old.snapshot_id if old else None,after_snapshot_id=snapshot.id,
+                         history_id=version.id if version else None,item_key=key),now)
+            if not old: db.add(MonitorObservation(source_id=source.id,item_key=key,payload=encode(after),snapshot_id=snapshot.id,history_id=version.id if version else None))
+            else:
+                old.payload=encode(after);old.snapshot_id=snapshot.id
+                if version: old.history_id=version.id
         if source.error:
             deliver(db,source,'source_recovered',sha(['recovered',source.last_success,now]),dict(snapshot_id=snapshot.id),now)
         source.snapshot_id=snapshot.id;source.last_success=now;source.next_check=now+INTERVAL;source.error='';source.failures=0
@@ -113,17 +122,29 @@ def check(company_id:str,request:Request):
 
 
 @router.get('/notifications')
-def notifications(request:Request,offset:int=0,unread:bool=False):
+def notifications(request:Request,offset:int=0,unread:bool=False,category:str='all'):
     actor=authenticate(request)
     if not 0<=offset<=100000: raise HTTPException(422,'Invalid offset')
+    groups={'all':None,'revisions':['possible_revision'],'periods':['new_metric_period'],
+        'other':['new_filing','amended_filing','filing_metadata_changed','nonreliance_disclosure','source_error','source_recovered']}
+    if category not in groups: raise HTTPException(422,'Unknown update category')
     with Session(request.app.state.engine) as db:
         private=(SiteNotification.org_id==actor.org_id)&(SiteNotification.owner_id==actor.id)
         query=select(SiteNotification,MonitorEvent,MonitorSource).join(MonitorEvent,SiteNotification.event_id==MonitorEvent.id).join(MonitorSource,MonitorEvent.source_id==MonitorSource.id).where(private)
         if unread: query=query.where(SiteNotification.read_at.is_(None))
+        if groups[category]: query=query.where(MonitorEvent.kind.in_(groups[category]))
         count=db.scalar(select(func.count()).select_from(SiteNotification).where(private,SiteNotification.read_at.is_(None)))
-        rows=list(db.execute(query.order_by(MonitorEvent.created.desc(),SiteNotification.id).offset(offset).limit(51)))
-        return dict(unread_count=count,has_more=len(rows)>50,items=[dict(id=n.id,read_at=n.read_at,company_id=s.company_id,
-            source_kind=s.kind,kind=ev.kind,created=ev.created,detail=json.loads(ev.payload)) for n,ev,s in rows[:50]])
+        priority=case((MonitorEvent.kind=='possible_revision',0),(MonitorEvent.kind=='new_metric_period',1),else_=2)
+        rows=list(db.execute(query.order_by(priority,MonitorEvent.created.desc(),SiteNotification.id).offset(offset).limit(51)))
+        return dict(unread_count=count,has_more=len(rows)>50,items=[notification_view(n,ev,s) for n,ev,s in rows[:50]])
+
+
+def notification_view(notification,event,source):
+    detail=json.loads(event.payload);fact=source.kind=='facts' and 'after' in detail
+    return dict(id=notification.id,read_at=notification.read_at,company_id=source.company_id,
+        source_kind=source.kind,source_id=source.id,kind=event.kind,created=event.created,detail=detail,
+        comparison=compare(detail.get('before'),detail['after']) if fact else None,
+        item_key=identity(detail['after']) if fact else None)
 
 
 @router.get('/notifications/count')

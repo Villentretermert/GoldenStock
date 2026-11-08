@@ -70,6 +70,21 @@ with TestClient(app) as client:
     reference.raise_for_status()
     lab_exchange=dict(exchange_id=exchange_id,import_id=import_id,confirmation=confirmation,
         dataset_id=reference.json()['id'],fingerprint=reference.json()['fingerprint'],original_sha=hashlib.sha256(stream.getvalue()).hexdigest())
+    from goldenstock.models import MonitorSource
+    from goldenstock.monitoring import process_monitor
+    client.put('/api/v1/favorites/jpm').raise_for_status()
+    with Session(app.state.engine) as db,db.begin():
+        for source in db.scalars(select(MonitorSource)): source.next_check=1e12
+    for i,value in enumerate([100,110,110]):
+        with Session(app.state.engine) as db,db.begin(): db.get(MonitorSource,'jpm-facts').next_check=0
+        payload=dict(cik=19617,facts={'us-gaap':{'Assets':{'units':{'USD':[dict(val=value,end='2025-12-31',
+            filed=f'2026-0{i+2}-01',accn=f'0000019617-26-{i+1:06d}',form='10-K')]}}}})
+        def fetch_fixture(*args,**kwargs): return 'https://data.sec.gov/synthetic',json.dumps(payload).encode(),payload
+        assert process_monitor(app.state.engine,app.state.settings,fetch_fixture,1800000000+i*21600)
+    update=client.get('/api/v1/notifications?category=revisions').json()['items'][0]
+    monitor_history_url='/api/v1/monitoring/jpm-facts/history/'+update['item_key']
+    monitor_history=client.get(monitor_history_url).json()
+    assert len(monitor_history['items'])==3 and monitor_history['items'][0]['reason']=='source_refresh'
     batch_args=dict(job_id=original['job_id'],page_start=1,page_end=1,profile='qwen4',with_context=True)
     planned=client.get('/api/v1/ai/batches/preview',params=batch_args);planned.raise_for_status()
     batch=client.post('/api/v1/ai/batches',json=batch_args|dict(plan_hash=planned.json()['plan_hash']))
@@ -110,5 +125,6 @@ with TestClient(app) as client:
             payload_sha256=hashlib.sha256(encoded.encode()).hexdigest()))
     print(json.dumps(dict(document=original, template=template.json(), knowledge_hash=knowledge["state_hash"],
                           pending_document=pending,batch_id=batch_id,batch_manifest=batch_manifest,batch_executions=batch_executions,lab_exchange=lab_exchange,
+                          monitor_history_url=monitor_history_url,monitor_history=monitor_history,monitor_update=update,
                           template_sha=hashlib.sha256(demo.content).hexdigest(),
                           old_session=client.cookies.get("gs_session"))))

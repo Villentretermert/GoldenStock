@@ -364,6 +364,22 @@ class MonitorObservation(Base):
     item_key: Mapped[str]=mapped_column(String(64),primary_key=True)
     payload: Mapped[str]=mapped_column(Text)
     snapshot_id: Mapped[str]=mapped_column(ForeignKey('monitor_snapshots.id'))
+    history_id: Mapped[str | None]=mapped_column(String(32),nullable=True)
+
+
+class MonitorFactVersion(Base):
+    __tablename__='monitor_fact_versions'
+    __table_args__=(UniqueConstraint('source_id','item_key','revision'),UniqueConstraint('previous_id'))
+    id: Mapped[str]=mapped_column(String(32),primary_key=True,default=new_id)
+    source_id: Mapped[str]=mapped_column(ForeignKey('monitor_sources.id'),index=True)
+    item_key: Mapped[str]=mapped_column(String(64))
+    revision: Mapped[int]=mapped_column(Integer)
+    previous_id: Mapped[str | None]=mapped_column(ForeignKey('monitor_fact_versions.id'),nullable=True)
+    snapshot_id: Mapped[str]=mapped_column(ForeignKey('monitor_snapshots.id'))
+    reason: Mapped[str]=mapped_column(String(32))
+    payload: Mapped[str]=mapped_column(Text)
+    payload_sha256: Mapped[str]=mapped_column(String(64))
+    created: Mapped[float]=mapped_column(Float,default=time.time)
 
 
 class MonitorEvent(Base):

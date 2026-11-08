@@ -72,7 +72,11 @@ def index(company,kind,raw,now):
         facts=data['facts']
         for namespace in ('us-gaap','ifrs-full'):
             for tag in TAGS:
-                for unit,values in facts.get(namespace,{}).get(tag,{}).get('units',{}).items():
+                concept=facts.get(namespace,{}).get(tag,{})
+                label=concept.get('label');definition=concept.get('description')
+                if any(v is not None and (not isinstance(v,str) or len(v)>20000) for v in (label,definition)):
+                    raise ValueError('Invalid concept definition')
+                for unit,values in concept.get('units',{}).items():
                     if not isinstance(unit,str) or len(unit)>40 or not isinstance(values,list) or len(values)>50000: raise ValueError('Invalid fact unit')
                     for position,value in enumerate(values):
                         if value.get('form') not in FORMS: continue
@@ -82,6 +86,7 @@ def index(company,kind,raw,now):
                         if start and start>end: raise ValueError('Invalid period')
                         filed=day(value['filed']);accn=accession(value['accn'])
                         item=dict(namespace=namespace,tag=tag,unit=unit,start=start,end=end,
+                            label=label,definition=definition,scope='entire_filing_entity',
                             value=number(value['val']),filed=filed,accession=accn,form=value['form'],url=filing_url(company,accn),
                             json_path=f'/facts/{namespace}/{tag}/units/{unit}/{position}')
                         key=sha([namespace,tag,unit,start,end]);rank=(filed,accn)

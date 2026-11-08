@@ -1,6 +1,6 @@
 {
   "policy": "gs024-v1",
-  "candidate_commit": "1b2ce9d5f6dc5bbd6bc95d6a776ef0686f94d06b",
+  "candidate_commit": "d3319b0ebfc3af2946a2f95fdd2cb8ab713906cb",
   "as_of": "2026-11-08",
   "open_critical_defects": 0,
   "gates": [
@@ -10,9 +10,9 @@
       "method": "automated",
       "data_kind": "synthetic",
       "reviewer": "GitHub Actions",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42426509690",
-      "candidate_commit": "1b2ce9d5f6dc5bbd6bc95d6a776ef0686f94d06b",
-      "note": "Published candidate Linux CI: 284 passed, 1 skipped; OCR verified in Docker. PostgreSQL, service isolation and encrypted recovery passed. Local Chrome plus Qwen verified a selected-page batch with two requests/results, exact saved source evidence and desktop/mobile UI. Real quality remains unmeasured."
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42430313451",
+      "candidate_commit": "d3319b0ebfc3af2946a2f95fdd2cb8ab713906cb",
+      "note": "Published candidate Linux CI: 289 passed, 1 skipped; OCR including a scanned section title and word locators verified in Docker. PostgreSQL, service isolation and encrypted recovery passed. Local Chrome plus Qwen verified named section selection, frozen separate context, source links, legacy batches and desktop/mobile. Nullable context-field completion was not successful in the synthetic diagnostic and is not claimed."
     },
     {
       "id": "five_company_journey",
@@ -20,8 +20,8 @@
       "method": "automated",
       "data_kind": "synthetic",
       "reviewer": "GitHub Actions",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42426509690",
-      "candidate_commit": "1b2ce9d5f6dc5bbd6bc95d6a776ef0686f94d06b",
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42430313451",
+      "candidate_commit": "d3319b0ebfc3af2946a2f95fdd2cb8ab713906cb",
       "note": "Candidate CI passed five synthetic PDF journeys through parser, review, snapshot, calculation, valuation and three exports. Real-company methodology remains pending."
     },
     {
@@ -30,9 +30,9 @@
       "method": "automated",
       "data_kind": "synthetic",
       "reviewer": "GitHub Actions",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42426509690",
-      "candidate_commit": "1b2ce9d5f6dc5bbd6bc95d6a776ef0686f94d06b",
-      "note": "Candidate CI restored encrypted synthetic data into a clean Docker project: schema 0017, 34 tables, four files and 15 HTTPS sessions. Saved PDF prefix resumed from page 26. Private AI batch manifest survived restore, access isolation and retry were verified. External media and field acceptance remain pending."
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42430313451",
+      "candidate_commit": "d3319b0ebfc3af2946a2f95fdd2cb8ab713906cb",
+      "note": "Candidate CI restored encrypted synthetic data into a clean Docker project: schema 0017, 34 tables, four files and 15 HTTPS sessions. PDF resumed from page 26; a private AI batch with the context contract survived restore, access isolation and retry. External media and field acceptance remain pending."
     },
     {
       "id": "source_coverage",
@@ -47,7 +47,7 @@
     {
       "id": "ai_quality",
       "status": "pending",
-      "note": "At corpus freeze, zero of 500 expected human labels are approved. Six private candidate documents require at least 100 reviewed holdout facts after overlapping periods and prior exposure are checked."
+      "note": "At corpus freeze, zero of 500 expected human labels are approved. Six private candidate documents need at least 100 reviewed holdout facts after exposure checks. GS-030 synthetic Qwen diagnostic delivered separate context but left currency, scale and period null; this remains a quality gap, not a passed gold case."
     },
     {
       "id": "remote_access",

@@ -1,7 +1,7 @@
 """Infrastructure and tenant-owned workspace entities; no financial facts yet."""
 import time
 import uuid
-from sqlalchemy import Float, String, Boolean, Integer, ForeignKey, UniqueConstraint, Text
+from sqlalchemy import Float, String, Boolean, Integer, ForeignKey, UniqueConstraint, Text, LargeBinary
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -255,6 +255,35 @@ class LabDataset(Base):
     kind: Mapped[str]=mapped_column(String(16))
     fingerprint: Mapped[str]=mapped_column(String(64))
     payload: Mapped[str]=mapped_column(Text)
+    created: Mapped[float]=mapped_column(Float,default=time.time)
+
+
+class LabExchange(Base):
+    """An unlabelled workbook draft never counts as an accepted reference."""
+    __tablename__='lab_exchanges'
+    __table_args__=(UniqueConstraint('owner_id','fingerprint'),)
+    id: Mapped[str]=mapped_column(String(32),primary_key=True,default=new_id)
+    org_id: Mapped[str]=mapped_column(ForeignKey('organizations.id'),index=True)
+    owner_id: Mapped[str]=mapped_column(ForeignKey('users.id'))
+    fingerprint: Mapped[str]=mapped_column(String(64))
+    payload: Mapped[str]=mapped_column(Text)
+    created: Mapped[float]=mapped_column(Float,default=time.time)
+
+
+class LabImport(Base):
+    __tablename__='lab_imports'
+    __table_args__=(UniqueConstraint('exchange_id','sha256'),)
+    id: Mapped[str]=mapped_column(String(32),primary_key=True,default=new_id)
+    org_id: Mapped[str]=mapped_column(ForeignKey('organizations.id'),index=True)
+    owner_id: Mapped[str]=mapped_column(ForeignKey('users.id'))
+    exchange_id: Mapped[str]=mapped_column(ForeignKey('lab_exchanges.id'))
+    sha256: Mapped[str]=mapped_column(String(64))
+    original: Mapped[bytes]=mapped_column(LargeBinary)
+    candidate: Mapped[str]=mapped_column(Text)
+    candidate_hash: Mapped[str]=mapped_column(String(64))
+    dataset_id: Mapped[str|None]=mapped_column(ForeignKey('lab_datasets.id'),nullable=True)
+    confirmation_note: Mapped[str]=mapped_column(Text,default='')
+    confirmed_at: Mapped[float|None]=mapped_column(Float,nullable=True)
     created: Mapped[float]=mapped_column(Float,default=time.time)
 
 

@@ -176,6 +176,30 @@ def main():
                 assert all(r.status_code==201 for r in lab_datasets),[r.text for r in lab_datasets]
                 assert len({r.json()['id'] for r in lab_datasets})==1
                 lab_dataset=lab_datasets[0].json()['id']
+                # Workbook previews and confirmations serialize under the same source lock.
+                from openpyxl import load_workbook
+                import io
+                exchange=client.post('/api/v1/lab/exchange/datasets/'+lab_dataset).json()['id']
+                raw=client.get('/api/v1/lab/exchange/drafts/'+exchange+'/download').content
+                book=load_workbook(io.BytesIO(raw))
+                source=client.get('/api/v1/lab/exchange/drafts/'+exchange).json()['cases'][0]['evidence'][0]
+                values=[source['id'],'profit','2',source['text'],'USD','millions','','','Synthetic reference']
+                for col,value in enumerate(values,3):
+                    cell=book['Labels'].cell(5,col,value);cell.data_type='s'
+                book['Cases']['C5']='labelled';buffer=io.BytesIO();book.save(buffer);book.close()
+                raw=buffer.getvalue()
+                with ThreadPoolExecutor(max_workers=3) as pool:
+                    imports=list(pool.map(lambda _:client.post('/api/v1/lab/exchange/imports',files={'file':('labels.xlsx',raw)}),range(3)))
+                assert all(r.status_code==201 for r in imports),[r.text for r in imports]
+                assert len({r.json()['id'] for r in imports})==1
+                import_url='/api/v1/lab/exchange/imports/'+imports[0].json()['id']
+                confirmation=dict(candidate_hash=client.get(import_url).json()['candidate_hash'],reference_confirmed=True,reason='Synthetic PostgreSQL review')
+                with ThreadPoolExecutor(max_workers=3) as pool:
+                    confirmed=list(pool.map(lambda _:client.post(import_url+'/confirm',json=confirmation),range(3)))
+                assert all(r.status_code==200 for r in confirmed),[r.text for r in confirmed]
+                assert len({r.json()['id'] for r in confirmed})==1 and confirmed[0].json()['revision']==2
+                assert client.get(import_url+'/original').content==raw
+                print('Workbook PostgreSQL PASS: concurrent import and confirmation deduplication, immutable revision and retained XLSX.')
                 with ThreadPoolExecutor(max_workers=3) as pool:
                     lab_experiments=list(pool.map(lambda _:client.post('/api/v1/lab/experiments',json={'dataset_id':lab_dataset}),range(3)))
                 assert all(r.status_code==201 for r in lab_experiments),[r.text for r in lab_experiments]

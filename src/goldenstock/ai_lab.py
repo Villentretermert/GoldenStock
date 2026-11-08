@@ -115,7 +115,7 @@ def create_dataset(data:DatasetRequest,request:Request):
         scheduling_lock(db)
         parent=owned(db,LabDataset,data.parent_id,actor) if data.parent_id else None
         if parent and (parent.split!=data.split or parent.kind!=data.kind): raise HTTPException(409,'A revision must preserve task and split')
-        cases=[];seen=set();sources=set()
+        cases=[];seen=set()
         for item in data.cases:
             case=prepare_case(db,actor,data.kind,item)
             identity=digest([{k:e[k] for k in ('source_sha256','text','location')} for e in case['evidence']])
@@ -124,27 +124,36 @@ def create_dataset(data:DatasetRequest,request:Request):
             try: case['expected']=validate_reference(data.kind,item.expected,case['evidence'])
             except (ValueError,TypeError,KeyError,ArithmeticError): raise HTTPException(422,'Invalid reference labels: use source IDs, verbatim quotes and reported numbers') from None
             cases.append(case)
-            sources.update(e['source_sha256'] for e in case['evidence'])
-        payload=dict(policy=POLICY,kind=data.kind,split=data.split,cases=cases)
-        fingerprint=digest(payload)
-        previous=db.scalar(select(LabDataset).where(LabDataset.owner_id==actor.id,LabDataset.fingerprint==fingerprint))
-        if previous: return dataset_view(previous,True)
-        for source in sources:
-            registered=db.get(LabSourceSplit,(actor.id,source))
-            if registered and registered.split!=data.split: raise HTTPException(409,'This source document already belongs to the other split')
-            if not registered: db.add(LabSourceSplit(owner_id=actor.id,source_hash=source,split=data.split))
-        # A reference change after an experiment consumed holdout is not a fresh holdout.
-        if data.split=='holdout':
-            for old in db.scalars(select(LabDataset).where(LabDataset.owner_id==actor.id,LabDataset.split=='holdout')):
-                overlap=sources & {e['source_sha256'] for c in checked_dataset(old)['cases'] for e in c['evidence']}
-                if overlap and db.scalar(select(LabExperiment.id).where(LabExperiment.dataset_id==old.id).limit(1)):
-                    raise HTTPException(409,'Consumed holdout sources cannot be relabelled or repackaged; use new source documents')
-        row=LabDataset(org_id=actor.org_id,owner_id=actor.id,title=data.title.strip(),kind=data.kind,split=data.split,
-            parent_id=parent.id if parent else None,revision=parent.revision+1 if parent else 1,
-            fingerprint=fingerprint,payload=encode(payload))
-        if not row.title: raise HTTPException(422,'Title required')
-        db.add(row);db.flush();audit(db,actor,'lab.dataset.created',row.id,fingerprint)
-        return dataset_view(row,True)
+        return dataset_view(save_dataset(db,actor,data.title,data.kind,data.split,cases,parent),True)
+
+
+def check_split(db,actor,split,cases,*,register=False):
+    sources={e['source_sha256'] for c in cases for e in c['evidence']}
+    for source in sources:
+        registered=db.get(LabSourceSplit,(actor.id,source))
+        if registered and registered.split!=split: raise HTTPException(409,'This source document already belongs to the other split')
+        if not registered and register: db.add(LabSourceSplit(owner_id=actor.id,source_hash=source,split=split))
+    if split=='holdout':
+        for old in db.scalars(select(LabDataset).where(LabDataset.owner_id==actor.id,LabDataset.split=='holdout')):
+            overlap=sources & {e['source_sha256'] for c in checked_dataset(old)['cases'] for e in c['evidence']}
+            if overlap and db.scalar(select(LabExperiment.id).where(LabExperiment.dataset_id==old.id).limit(1)):
+                raise HTTPException(409,'Consumed holdout sources cannot be relabelled or repackaged; use new source documents')
+
+
+def save_dataset(db,actor,title,kind,split,cases,parent=None):
+    """Shared immutable save after the caller has validated labels and human confirmation."""
+    payload=dict(policy=POLICY,kind=kind,split=split,cases=cases);fingerprint=digest(payload)
+    previous=db.scalar(select(LabDataset).where(LabDataset.owner_id==actor.id,LabDataset.fingerprint==fingerprint))
+    if previous: return previous
+    if parent and db.scalar(select(LabDataset.id).where(LabDataset.parent_id==parent.id).limit(1)):
+        raise HTTPException(409,'Reference has a newer revision; export the latest version')
+    check_split(db,actor,split,cases,register=True)
+    row=LabDataset(org_id=actor.org_id,owner_id=actor.id,title=title.strip(),kind=kind,split=split,
+        parent_id=parent.id if parent else None,revision=parent.revision+1 if parent else 1,
+        fingerprint=fingerprint,payload=encode(payload))
+    if not row.title: raise HTTPException(422,'Title required')
+    db.add(row);db.flush();audit(db,actor,'lab.dataset.created',row.id,fingerprint)
+    return row
 
 
 @router.get('/datasets')

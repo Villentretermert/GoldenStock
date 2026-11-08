@@ -28,6 +28,7 @@ def mount_lab_ui(app):
         if not actor: return RedirectResponse('/login',status_code=303)
         body='<h1>AI Lab</h1><p>Compare local models against your reference labels. Keep source documents separate between development and holdout.</p><div class="grid"><article class="card"><h2>1. Prepare a reference</h2><p>Select extracted evidence or reviewed company facts. Label expected metrics or relevant citations before running the models.</p><a class="button" href="/lab/new">Create a dataset</a></article><article class="card"><h2>2. Review blind answers</h2><p>The two local profiles run sequentially. Judge every successful answer before revealing model names.</p></article><article class="card"><h2>3. Compare results</h2><p>Precision, recall, context, citations and execution time are reported separately. A small test does not establish 95% accuracy.</p></article></div><h2>Your datasets</h2>'
         for d in datasets(request): body+=f'<p><a href="/lab/datasets/{e(d["id"])}">{e(d["title"])} · v{d["revision"]}</a> · {e(d["kind"])} · {e(d["split"])}</p>'
+        body+='<p><a href="/lab/workbooks">Annotation workbooks and imports</a></p>'
         body+='<h2>Your experiments</h2>'
         for r in experiments(request): body+=f'<p><a href="/lab/experiments/{e(r["id"])}">Experiment {e(r["id"][:8])}</a> · {"Models revealed" if r["revealed"] else "Blind review"}</p>'
         return page('AI Lab',body,actor)
@@ -57,6 +58,11 @@ def mount_lab_ui(app):
                     case=prepare_case(db,actor,kind,source)
         if not case: return page('Reference dataset',body,actor)
         body+='<h2>Source evidence</h2>'+sources(case)
+        if not parent:
+            draft_fields=hidden('kind',kind)+hidden('job_id',job_id if kind=='proposals' else '')+hidden('company_id',company_id if kind=='summary' else '')+hidden('offset',offset)
+            draft_fields+=field('Workbook title','title','',True)+select_field('Workbook split','split',[('development','Development'),('holdout','Holdout')])
+            body+='<h2>Annotate in XLSX</h2><p>Create an unlabelled workbook with these exact sources. No reference facts are accepted at this step. The source split is reserved for this analyst.</p>'
+            body+=form('/api/v1/lab/exchange/drafts','Prepare annotation workbook',draft_fields).replace('<form ','<form data-lab-draft="true" ',1)
         fields=hidden('kind',kind)+hidden('job_id',job_id if kind=='proposals' else '')+hidden('company_id',company_id if kind=='summary' else '')+hidden('offset',offset)+hidden('parent_id',parent_id)
         fields+=field('Dataset title','title',parent['title'] if parent else '',True)
         fields+=select_field('Evaluation split','split',[('development','Development'),('holdout','Holdout — reserve for final comparison')],parent['split'] if parent else 'development')
@@ -83,6 +89,7 @@ def mount_lab_ui(app):
         d=dataset(key,request)
         body=f'<h1>{e(d["title"])}</h1><p>Version {d["revision"]} · {e(d["kind"])} · {e(d["split"])}</p><p><a href="/lab">AI Lab</a> · <a href="/lab/new?parent_id={e(key)}">Create a revised reference</a> · <a href="/api/v1/lab/datasets/{e(key)}">Reference receipt (JSON)</a></p>'
         body+='<div class="notice">Compare the two installed Qwen profiles in one sequential queue. Reviewers see anonymous variants until all successful answers have been judged. Holdout can be consumed by one configuration only.</div>'
+        body+=form('/api/v1/lab/exchange/datasets/'+key,'Export labels to XLSX').replace('<form ','<form data-lab-exchange="true" ',1)
         body+=form('/api/v1/lab/experiments','Compare local models',hidden('dataset_id',key)).replace('<form ','<form data-lab-experiment="true" ',1)
         for n,case in enumerate(d['snapshot']['cases']):
             body+=f'<h2>Case {n+1}</h2>'+sources(case)+'<details><summary>Saved reference labels</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+e(json.dumps(case['expected'],indent=2))+'</pre></details>'

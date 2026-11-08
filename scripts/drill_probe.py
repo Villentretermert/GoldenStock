@@ -61,6 +61,12 @@ try:
     assert hashlib.sha256(admin.get(path).content).hexdigest() == receipt["template_sha"]
     knowledge = admin.get("/api/v1/knowledge/jpm/export").json()
     assert len(knowledge["facts"]) == 1 and knowledge["state_hash"] == receipt["knowledge_hash"]
+    labels=receipt['lab_exchange'];import_url='/api/v1/lab/exchange/imports/'+labels['import_id']
+    restored_labels=admin.get(import_url).json()
+    assert restored_labels['dataset_id']==labels['dataset_id'] and restored_labels['confirmation_note']==labels['confirmation']['reason']
+    assert hashlib.sha256(admin.get(import_url+'/original').content).hexdigest()==labels['original_sha']
+    assert sessions[1][0].get(import_url).status_code==404 and sessions[1][0].get(import_url+'/original').status_code==404
+    assert admin.post(import_url+'/confirm',json=labels['confirmation']).json()['fingerprint']==labels['fingerprint']
     batch_url='/api/v1/ai/batches/'+receipt['batch_id']
     restored_batch=admin.get(batch_url);restored_batch.raise_for_status()
     assert restored_batch.json()['manifest']==receipt['batch_manifest']
@@ -125,7 +131,7 @@ try:
     timings = sorted(item[1] for item in sessions)
     print(json.dumps(dict(concurrent_accounts=len(sessions), scenario="HTTPS login, session and catalog",
                           p50_ms=round(timings[7]), p95_ms=round(timings[math.ceil(.95*15)-1]),
-                          original=True, template=True, reviewed_knowledge=True, ai_batch_restored=True, ai_execution_history_restored=True, explicit_cpu=True, pdf_checkpoint_resumed=True, revoked_session_denied=True,
+                          original=True, template=True, reviewed_knowledge=True, lab_exchange_restored=True, ai_batch_restored=True, ai_execution_history_restored=True, explicit_cpu=True, pdf_checkpoint_resumed=True, revoked_session_denied=True,
                           old_session_denied=True, inference_outage_isolated=True)))
 finally:
     for session, _ in sessions:

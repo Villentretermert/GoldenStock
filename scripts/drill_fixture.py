@@ -52,6 +52,24 @@ with TestClient(app) as client:
     template.raise_for_status()
     knowledge = client.get("/api/v1/knowledge/jpm/export").json()
     assert len(knowledge["facts"]) == 1
+    exchange=client.post('/api/v1/lab/exchange/drafts',json=dict(title='Synthetic recovery labels',
+        kind='proposals',split='development',cases=[dict(job_id=original['job_id'],expected=[])]))
+    exchange.raise_for_status();exchange_id=exchange.json()['id']
+    import io
+    from openpyxl import load_workbook
+    workbook=load_workbook(io.BytesIO(client.get('/api/v1/lab/exchange/drafts/'+exchange_id+'/download').content))
+    values=[original['version_id']+':0','profit','2','2','USD','millions','','','Synthetic recovery label']
+    for col,value in enumerate(values,3):
+        cell=workbook['Labels'].cell(5,col,value);cell.data_type='s'
+    workbook['Cases']['C5']='labelled';stream=io.BytesIO();workbook.save(stream);workbook.close()
+    imported=client.post('/api/v1/lab/exchange/imports',files={'file':('labels.xlsx',stream.getvalue())})
+    imported.raise_for_status();import_id=imported.json()['id']
+    import_receipt=client.get('/api/v1/lab/exchange/imports/'+import_id).json()
+    confirmation=dict(candidate_hash=import_receipt['candidate_hash'],reference_confirmed=True,reason='Synthetic recovery reference check')
+    reference=client.post('/api/v1/lab/exchange/imports/'+import_id+'/confirm',json=confirmation)
+    reference.raise_for_status()
+    lab_exchange=dict(exchange_id=exchange_id,import_id=import_id,confirmation=confirmation,
+        dataset_id=reference.json()['id'],fingerprint=reference.json()['fingerprint'],original_sha=hashlib.sha256(stream.getvalue()).hexdigest())
     batch_args=dict(job_id=original['job_id'],page_start=1,page_end=1,profile='qwen4',with_context=True)
     planned=client.get('/api/v1/ai/batches/preview',params=batch_args);planned.raise_for_status()
     batch=client.post('/api/v1/ai/batches',json=batch_args|dict(plan_hash=planned.json()['plan_hash']))
@@ -91,6 +109,6 @@ with TestClient(app) as client:
             source_sha256=version.sha256,completed_pages=25,total_pages=26,payload=encoded,
             payload_sha256=hashlib.sha256(encoded.encode()).hexdigest()))
     print(json.dumps(dict(document=original, template=template.json(), knowledge_hash=knowledge["state_hash"],
-                          pending_document=pending,batch_id=batch_id,batch_manifest=batch_manifest,batch_executions=batch_executions,
+                          pending_document=pending,batch_id=batch_id,batch_manifest=batch_manifest,batch_executions=batch_executions,lab_exchange=lab_exchange,
                           template_sha=hashlib.sha256(demo.content).hexdigest(),
                           old_session=client.cookies.get("gs_session"))))

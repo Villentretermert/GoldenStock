@@ -85,18 +85,20 @@ const checks=[];for(let n=0;n<3;n++){const prefix='check.'+n+'.';if(values[prefi
 body=JSON.stringify({title:values.title,company_id:values.company_id,template_id:values.template_id,version_id:values.version_id,snapshot_id:values.snapshot_id||null,scenarios,checks});
 if(form.dataset.payload!==body){form.dataset.requestKey=crypto.randomUUID();form.dataset.payload=body;}
 headers['Idempotency-Key']=form.dataset.requestKey;headers['Content-Type']='application/json';}
+else if(form.dataset.labDraft){const v=Object.fromEntries(fields);
+body=JSON.stringify({title:v.title,kind:v.kind,split:v.split,cases:[{job_id:v.job_id||null,company_id:v.company_id||null,offset:Number(v.offset||0),expected:[]}]});headers['Content-Type']='application/json';}
 else if(form.dataset.labDataset){const v=Object.fromEntries(fields);
 const expected=[];if(v.kind==='summary')expected.push(...fields.getAll('expected'));
 else for(let n=0;n<12;n++){const prefix='ref.'+n+'.';if(!v[prefix+'metric'])continue;const p={};
 for(const k of ['evidence_id','metric','number_text','quote','currency','scale','period','perimeter','definition'])p[k]=v[prefix+k]||null;expected.push(p);}
 body=JSON.stringify({title:v.title,kind:v.kind,split:v.split,parent_id:v.parent_id||null,reference_confirmed:fields.has('reference_confirmed'),cases:[{job_id:v.job_id||null,company_id:v.company_id||null,offset:Number(v.offset||0),expected}]});headers['Content-Type']='application/json';}
 else if(form.dataset.upload){body=fields;form.dataset.requestKey ||= crypto.randomUUID();headers['Idempotency-Key']=form.dataset.requestKey;}
-else{let values=Object.fromEntries(fields);for(const k of ['shared','active'])if(k in values)values[k]=values[k]==='true';
+else{let values=Object.fromEntries(fields);for(const k of ['shared','active','reference_confirmed'])if(k in values)values[k]=values[k]==='true';
 if('source_start' in values)values.source_start=Number(values.source_start);
 if('revision' in values)values.revision=Number(values.revision);body=JSON.stringify(values);headers['Content-Type']='application/json';}
 const response=await fetch(form.dataset.api,{method:form.dataset.method||'POST',headers,body});const result=await response.json();
 if(!response.ok)throw new Error(typeof result.detail==='string'?result.detail:'Please check the entered values');
-location.href=form.dataset.aiBatch?'/ai-batch/'+result.id:form.dataset.aiProposal?'/ai-run/'+result.id:form.dataset.labDataset?'/lab/datasets/'+result.id:form.dataset.labExperiment?'/lab/experiments/'+result.id:form.dataset.valuation?'/valuations/'+result.id:form.dataset.calculation?'/calculations/'+result.id:(form.dataset.next||location.pathname+location.search);
+location.href=form.dataset.labDraft||form.dataset.labExchange?'/lab/workbooks/'+result.id:form.dataset.labImport?'/lab/workbook-imports/'+result.id:form.dataset.labConfirm?'/lab/datasets/'+result.id:form.dataset.aiBatch?'/ai-batch/'+result.id:form.dataset.aiProposal?'/ai-run/'+result.id:form.dataset.labDataset?'/lab/datasets/'+result.id:form.dataset.labExperiment?'/lab/experiments/'+result.id:form.dataset.valuation?'/valuations/'+result.id:form.dataset.calculation?'/calculations/'+result.id:(form.dataset.next||location.pathname+location.search);
 }catch(error){message.textContent=error.message;message.scrollIntoView({block:'center'});}finally{if(button)button.disabled=false;}
 }));
 '''
@@ -137,6 +139,8 @@ def company_card(c):
 
 
 def mount_ui(app):
+    from goldenstock.lab_exchange_ui import mount_exchange_ui
+    mount_exchange_ui(app)
     from goldenstock.monitoring_ui import mount_monitoring_ui
     mount_monitoring_ui(app)
     from goldenstock.ai_lab_ui import mount_lab_ui

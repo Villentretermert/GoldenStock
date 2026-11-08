@@ -328,6 +328,35 @@ let browser;
  await page.screenshot({path:'design/previews/extraction-mobile.png',fullPage:true});
  if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Extraction page overflow');
  await page.setViewportSize({width:1440,height:1000});
+ if(process.env.GS_QA_LAB_EXCHANGE==='1'){
+   await page.goto(base+'/lab/new?job_id='+version.job_id);
+   await page.getByLabel('Workbook title',{exact:true}).fill('Synthetic browser annotation');
+   await page.getByRole('button',{name:'Prepare annotation workbook',exact:true}).click();
+   await page.getByRole('link',{name:'Download annotation XLSX',exact:true}).waitFor();
+   await page.screenshot({path:'design/previews/lab-workbook-desktop.png',fullPage:true});
+   fs.mkdirSync('.build-lab-exchange',{recursive:true});
+   const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('link',{name:'Download annotation XLSX',exact:true}).click()]);
+   const original=path.resolve('.build-lab-exchange/browser-draft.xlsx'),completed=path.resolve('.build-lab-exchange/browser-completed.xlsx');
+   await download.saveAs(original);
+   require('child_process').execFileSync(process.env.GS_QA_PYTHON,['scripts/fill_annotation_fixture.py',original,completed]);
+   if((await(await page.request.get(base+'/api/v1/lab/datasets')).json()).length!==0)throw Error('Draft created reference labels');
+   await page.getByLabel('Completed annotation workbook',{exact:true}).setInputFiles(completed);
+   await page.getByRole('button',{name:'Preview workbook import',exact:true}).click();
+   await page.getByRole('heading',{name:'Review workbook changes',exact:true}).waitFor();
+   await page.screenshot({path:'design/previews/lab-import-desktop.png',fullPage:true});
+   await page.setViewportSize({width:390,height:900});
+   await page.screenshot({path:'design/previews/lab-import-mobile.png',fullPage:true});
+   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Import preview mobile overflow');
+   await page.setViewportSize({width:1440,height:1000});
+   if((await(await page.request.get(base+'/api/v1/lab/datasets')).json()).length!==0)throw Error('Preview accepted labels');
+   await page.getByLabel('Review note',{exact:true}).fill('Checked synthetic workbook against browser fixture');
+   await page.getByRole('checkbox').check();
+   await page.getByRole('button',{name:'Confirm and save reference',exact:true}).click();
+   await page.getByText('Version 1 · proposals · development',{exact:true}).waitFor();
+   await page.getByRole('button',{name:'Export labels to XLSX',exact:true}).click();
+   await page.getByText('Base reference:',{exact:false}).waitFor();
+   console.log('Workbook browser PASS: draft, download, literal XLSX edit, preview, explicit confirmation, saved reference export and mobile layout.');
+ }
  async function mapFact(scale){
    await page.goto(base+'/normalize/'+version.job_id+'/0');
    await page.getByLabel('Exact number from this evidence').fill('-120');

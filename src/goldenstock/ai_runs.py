@@ -3,12 +3,14 @@ import hashlib
 import json
 import secrets
 import time
+from contextlib import nullcontext
 from fastapi import APIRouter,HTTPException,Request,Query
 from pydantic import BaseModel,ConfigDict,Field
 from sqlalchemy import select,func
 from sqlalchemy.orm import Session
 from goldenstock.auth import authenticate,audit,Actor
-from goldenstock.models import AIRun,Company,DocumentVersion,Document,Extraction,User
+from goldenstock.models import AIRun,AIExecution,Company,DocumentVersion,Document,Extraction,User
+from goldenstock.ai_resources import DeviceGuard,DeviceUnavailable,PENDING,LEASE_SECONDS,history,choose_device,POLICY
 from goldenstock.documents import authorized_job
 from goldenstock.inference import PROFILES,PROMPT_VERSION,OllamaProvider,InferenceError
 from goldenstock.knowledge import pack,retrieve
@@ -24,7 +26,7 @@ def private(actor):
 
 def view(row):
     return dict(id=row.id,company_id=row.company_id,kind=row.kind,profile=row.profile,state=row.state,
-        error=row.error,attempts=row.attempts,created=row.created,result=json.loads(row.output))
+        error=row.error,attempts=row.attempts,device=row.device,created=row.created,result=json.loads(row.output))
 
 
 class ProposalRequest(BaseModel):
@@ -72,7 +74,7 @@ def enqueue(db,actor,company_id,kind,profile,payload):
     db.scalar(select(Company).where(Company.id=='sber').with_for_update())
     old=db.scalar(select(AIRun).where(private(actor),AIRun.fingerprint==fingerprint))
     if old: return view(old)
-    count=db.scalar(select(func.count()).select_from(AIRun).where(private(actor),AIRun.state.in_(['queued','running'])))
+    count=db.scalar(select(func.count()).select_from(AIRun).where(private(actor),AIRun.state.in_(PENDING)))
     if count>=10: raise HTTPException(429,'Maximum ten pending AI tasks per analyst')
     row=AIRun(org_id=actor.org_id,owner_id=actor.id,company_id=company_id,kind=kind,profile=profile,input=encoded,fingerprint=fingerprint)
     db.add(row);db.flush();audit(db,actor,'ai.queued',row.id,kind)
@@ -130,6 +132,7 @@ def run(run_id:str,request:Request):
         row=db.scalar(select(AIRun).where(private(actor),AIRun.id==run_id))
         if not row or row.kind.startswith('lab_'): raise HTTPException(404,'Run not found')
         result=view(row)
+        result['executions']=history(db,row)
         if row.kind in {'proposals','batch_proposals'}:
             result['source_window']=json.loads(row.input)
         elif row.kind=='summary':
@@ -149,20 +152,27 @@ def control(run_id:str,action:str,request:Request):
         db.scalar(select(Company).where(Company.id=='sber').with_for_update())
         row=db.scalar(select(AIRun).where(private(actor),AIRun.id==run_id).with_for_update())
         if not row or row.kind.startswith(('lab_','batch_')): raise HTTPException(404,'Run not found')
-        if action=='cancel' and row.state in {'queued','running'}:
+        if action in {'use-cpu','check-gpu'}:
+            choose_device([row],action)
+        elif action=='cancel' and row.state in PENDING:
             row.state='cancelled' # Keep the lease until the provider returns; no overlapping GPU work.
         elif action=='retry' and row.state in {'failed','cancelled'} and row.lease_until<=time.time():
+            count=db.scalar(select(func.count()).select_from(AIRun).where(private(actor),AIRun.state.in_(PENDING)))
+            if count>=10: raise HTTPException(429,'Maximum ten pending AI tasks per analyst')
             row.state='queued';row.error='';row.lease_token=''
         else: raise HTTPException(409,'Action unavailable for this run')
         audit(db,actor,'ai.'+action,row.id)
         return view(row)
 
 
-def process_ai(engine,settings,provider=None):
+def process_ai(engine,settings,provider=None,*,guard_factory=DeviceGuard):
     now=time.time()
     with Session(engine) as db,db.begin():
         db.scalar(select(Company).where(Company.id=='sber').with_for_update())
         if db.scalar(select(AIRun.id).where(AIRun.lease_until>now).limit(1)): return False
+        for unfinished in db.scalars(select(AIExecution).join(AIRun,AIRun.id==AIExecution.run_id).where(
+                AIExecution.finished.is_(None),AIRun.lease_until<=now)):
+            unfinished.state='interrupted';unfinished.finished=now
         for stale in db.scalars(select(AIRun).where(AIRun.state=='running',AIRun.lease_until<=now)):
             stale.state='failed';stale.error='worker_interrupted';stale.lease_token=''
         row=db.scalar(select(AIRun).where(AIRun.state=='queued').order_by(AIRun.created).limit(1).with_for_update())
@@ -170,11 +180,16 @@ def process_ai(engine,settings,provider=None):
         user=db.get(User,row.owner_id)
         if not user or not user.active or user.org_id!=row.org_id:
             row.state='failed';row.error='access_revoked';return True
-        row.state='running';row.attempts+=1;row.lease_token=secrets.token_hex(16);row.lease_until=now+240
+        row.state='running';row.attempts+=1;row.lease_token=secrets.token_hex(16);row.lease_until=now+LEASE_SECONDS
         key,token,profile,payload,kind=row.id,row.lease_token,row.profile,json.loads(row.input),row.kind
+        device,attempt=row.device,row.attempts
+        db.add(AIExecution(run_id=key,attempt=attempt,state='running',started=now,
+            receipt=json.dumps(dict(policy=POLICY,requested_device=device))))
         actor=Actor(user.id,user.org_id,user.login,user.account_admin,'')
         audit(db,actor,'ai.running',key)
-    output={};error=''
+    output={};error='';waiting=False;guard=None
+    receipt=dict(policy=POLICY,requested_device=device,observed_device=None,cleanup_confirmed=True,inference_started=False)
+    started=time.monotonic()
     try:
         adapter=provider or OllamaProvider(settings)
         if kind=='batch_proposals':
@@ -183,25 +198,42 @@ def process_ai(engine,settings,provider=None):
         if kind.startswith('lab_'):
             from goldenstock.ai_lab import validate_lab_input
             validate_lab_input(payload,profile)
-        if kind=='batch_proposals' and 'context' in payload:
-            output=adapter.propose_context(payload['evidence'],payload['context'],profile)
-        else:
-            output=adapter.summarize(payload['evidence'],profile) if kind in {'summary','public_summary','lab_summary'} else adapter.propose(payload['evidence'],profile)
+        # Every real Ollama call passes admission; injected test adapters perform no inference.
+        if isinstance(adapter,OllamaProvider):
+            guard=guard_factory(adapter,profile,device);receipt=guard.receipt
+        else: receipt['observed_device']='test_adapter'
+        with guard.execution() if guard else nullcontext(receipt):
+            with Session(engine) as db:
+                current=db.get(AIRun,key);user=db.get(User,actor.id)
+                if (current.state!='running' or current.lease_token!=token or not user or
+                    not user.active or user.org_id!=actor.org_id):
+                    raise InferenceError('access_revoked_or_cancelled')
+            receipt['inference_started']=True
+            if kind=='batch_proposals' and 'context' in payload:
+                output=adapter.propose_context(payload['evidence'],payload['context'],profile)
+            else:
+                output=adapter.summarize(payload['evidence'],profile) if kind in {'summary','public_summary','lab_summary'} else adapter.propose(payload['evidence'],profile)
         if kind.startswith('lab_'):
             spec=payload['lab_spec']
             if any(output.get(k)!=spec[k] for k in ('model','model_digest','prompt_version','prompt_sha256')):
                 raise InferenceError('experiment_receipt_mismatch')
+    except DeviceUnavailable as exc: error=str(exc);waiting=True
     except InferenceError as exc: error=str(exc)
     except Exception: error='inference_failed'
+    receipt['seconds']=round(time.monotonic()-started,3)
     with Session(engine) as db,db.begin():
         row=db.scalar(select(AIRun).where(AIRun.id==key).with_for_update())
         user=db.get(User,row.owner_id)
         if row.lease_token!=token: return True
-        row.lease_until=0
-        if row.state!='running': return True
-        if not user or not user.active or user.org_id!=row.org_id: error='access_revoked'
-        if time.time()>now+240: error='lease_expired'
-        row.state='failed' if error else 'succeeded';row.error=error
+        if receipt.get('cleanup_confirmed',True): row.lease_until=0
+        execution=db.get(AIExecution,(key,attempt))
+        execution.receipt=json.dumps(receipt);execution.finished=time.time()
+        if row.state!='running':
+            execution.state='cancelled';return True
+        if not user or not user.active or user.org_id!=row.org_id: error='access_revoked';waiting=False
+        if time.time()>now+LEASE_SECONDS: error='lease_expired';waiting=False
+        row.state='awaiting_device' if waiting else 'failed' if error else 'succeeded';row.error=error
+        execution.state=row.state
         row.output=json.dumps(output if not error else {})
         audit(db,actor,'ai.'+row.state,key,error)
     return True

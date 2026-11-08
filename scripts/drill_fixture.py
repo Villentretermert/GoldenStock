@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import time
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -55,6 +56,13 @@ with TestClient(app) as client:
     planned=client.get('/api/v1/ai/batches/preview',params=batch_args);planned.raise_for_status()
     batch=client.post('/api/v1/ai/batches',json=batch_args|dict(plan_hash=planned.json()['plan_hash']))
     batch.raise_for_status();batch_id=batch.json()['id']
+    # Source fixture runs without a worker; exercise the real missing-telemetry guard here.
+    from goldenstock.ai_runs import process_ai
+    assert process_ai(app.state.engine,app.state.settings)
+    progress=client.get('/api/v1/ai/batches/'+batch_id).json()
+    assert progress['state']=='awaiting_device'
+    batch_executions=client.get('/api/v1/ai/runs/'+progress['runs'][0]['run_id']).json()['executions']
+    assert batch_executions[-1]['requested_device']=='gpu'
     stopped=client.post('/api/v1/ai/batches/'+batch_id+'/cancel')
     assert stopped.status_code in (200,409)
     batch_manifest=client.get('/api/v1/ai/batches/'+batch_id).json()['manifest']
@@ -83,6 +91,6 @@ with TestClient(app) as client:
             source_sha256=version.sha256,completed_pages=25,total_pages=26,payload=encoded,
             payload_sha256=hashlib.sha256(encoded.encode()).hexdigest()))
     print(json.dumps(dict(document=original, template=template.json(), knowledge_hash=knowledge["state_hash"],
-                          pending_document=pending,batch_id=batch_id,batch_manifest=batch_manifest,
+                          pending_document=pending,batch_id=batch_id,batch_manifest=batch_manifest,batch_executions=batch_executions,
                           template_sha=hashlib.sha256(demo.content).hexdigest(),
                           old_session=client.cookies.get("gs_session"))))

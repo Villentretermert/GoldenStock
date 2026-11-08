@@ -66,12 +66,28 @@ try:
     assert restored_batch.json()['manifest']==receipt['batch_manifest']
     assert restored_batch.json()['manifest']['with_context'] is True
     assert sessions[1][0].get(batch_url).status_code==404
+    saved_run=restored_batch.json()['runs'][0]['run_id']
+    assert admin.get('/api/v1/ai/runs/'+saved_run).json()['executions']==receipt['batch_executions']
     assert admin.post(batch_url+'/retry').status_code==200
+    for _ in range(35):
+        restored_batch=admin.get(batch_url).json()
+        if restored_batch['state']=='awaiting_device': break
+        time.sleep(1)
+    assert restored_batch['counts']=={'awaiting_device':1}
+    run_id=restored_batch['runs'][0]['run_id']
+    waiting=admin.get('/api/v1/ai/runs/'+run_id).json()
+    assert waiting['executions'][-1]['requested_device']=='gpu'
+    assert waiting['executions'][-1]['inference_started'] is False
+    # Clean CPU-only stand: analyst choice is required even when no GPU exists.
+    assert admin.post(batch_url+'/use-cpu').status_code==200
     for _ in range(35):
         restored_batch=admin.get(batch_url).json()
         if restored_batch['completed']==restored_batch['total']: break
         time.sleep(1)
-    assert restored_batch['counts']=={'failed':1}
+    assert restored_batch['counts']=={'failed':1}  # No inference service in the restore drill.
+    attempts=admin.get('/api/v1/ai/runs/'+run_id).json()['executions']
+    assert attempts[-2]==waiting['executions'][-1]
+    assert attempts[-1]['requested_device']=='cpu'
     pending=receipt['pending_document']
     pending_url='/api/v1/jobs/'+pending['job_id']
     assert admin.get(pending_url).json()['progress']==dict(status='partial',completed_pages=25,total_pages=26)
@@ -92,6 +108,11 @@ try:
     assert sessions[-1][0].get("/api/v1/companies").status_code == 401
     run = admin.post("/api/v1/ai/proposals", json={"job_id": original["job_id"]})
     run.raise_for_status()
+    run_url='/api/v1/ai/runs/'+run.json()['id']
+    for _ in range(35):
+        if admin.get(run_url).json()['state']=='awaiting_device': break
+        time.sleep(1)
+    assert admin.post(run_url+'/use-cpu').status_code==200
     for attempt in range(35):
         result = admin.get("/api/v1/ai/runs/"+run.json()["id"]).json()
         if result["state"] == "failed":
@@ -104,7 +125,7 @@ try:
     timings = sorted(item[1] for item in sessions)
     print(json.dumps(dict(concurrent_accounts=len(sessions), scenario="HTTPS login, session and catalog",
                           p50_ms=round(timings[7]), p95_ms=round(timings[math.ceil(.95*15)-1]),
-                          original=True, template=True, reviewed_knowledge=True, ai_batch_restored=True, pdf_checkpoint_resumed=True, revoked_session_denied=True,
+                          original=True, template=True, reviewed_knowledge=True, ai_batch_restored=True, ai_execution_history_restored=True, explicit_cpu=True, pdf_checkpoint_resumed=True, revoked_session_denied=True,
                           old_session_denied=True, inference_outage_isolated=True)))
 finally:
     for session, _ in sessions:

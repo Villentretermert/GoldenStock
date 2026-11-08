@@ -4,6 +4,7 @@ from fastapi.responses import RedirectResponse
 from goldenstock.ai_batches import preview,detail,section_catalog
 from goldenstock.inference import PROFILES
 from goldenstock.context_ui import context_cards
+from goldenstock.ai_resources_ui import device_choice
 
 
 def mount_batch_ui(app):
@@ -72,7 +73,9 @@ def mount_batch_ui(app):
         if m.get('section'): body+=f'<p>Section: {e(m["section"]["title"])} · inferred page range</p>'
         if m.get('with_context'): body+='<p>Nearby context and its separate source links are saved inside each part.</p>'
         body+=f'<p><a href="/ai-batch/{e(key)}">Refresh batch</a> · <a href="/ai/{e(data["company_id"])}">AI workspace</a></p>'
-        if data['counts'].get('queued',0)+data['counts'].get('running',0):
+        if data['counts'].get('awaiting_device',0):
+            body+=device_choice('/api/v1/ai/batches/'+key,group=True)
+        if data['counts'].get('queued',0)+data['counts'].get('running',0)+data['counts'].get('awaiting_device',0):
             body+=form('/api/v1/ai/batches/'+key+'/cancel','Cancel pending parts')
         if data['counts'].get('failed',0)+data['counts'].get('cancelled',0):
             body+=form('/api/v1/ai/batches/'+key+'/retry','Retry failed or cancelled parts')

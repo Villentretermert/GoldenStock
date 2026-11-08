@@ -209,9 +209,21 @@ class AIRun(Base):
     state: Mapped[str]=mapped_column(String(24),default='queued')
     error: Mapped[str]=mapped_column(String(80),default='')
     attempts: Mapped[int]=mapped_column(Integer,default=0)
+    device: Mapped[str]=mapped_column(String(8),default='gpu',server_default='gpu')
     lease_until: Mapped[float]=mapped_column(Float,default=0)
     lease_token: Mapped[str]=mapped_column(String(32),default='')
     created: Mapped[float]=mapped_column(Float,default=time.time)
+
+
+class AIExecution(Base):
+    """One receipt per attempt, retained across resource decisions and retries."""
+    __tablename__='ai_executions'
+    run_id: Mapped[str]=mapped_column(ForeignKey('ai_runs.id'),primary_key=True)
+    attempt: Mapped[int]=mapped_column(Integer,primary_key=True)
+    state: Mapped[str]=mapped_column(String(24))
+    started: Mapped[float]=mapped_column(Float)
+    finished: Mapped[float|None]=mapped_column(Float,nullable=True)
+    receipt: Mapped[str]=mapped_column(Text)
 
 
 class AIProposalBatch(Base):

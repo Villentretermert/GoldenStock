@@ -109,6 +109,7 @@ class OllamaProvider:
     def __init__(self,settings: Settings,transport=None):
         self.url=settings.inference_url
         self.transport=transport
+        self.execution_options={}
 
     def request(self,path,body=None,timeout=180):
         try:
@@ -159,7 +160,7 @@ class OllamaProvider:
         start=time.monotonic()
         result=self.request('/api/chat',dict(model=selected.model,stream=False,think=False,keep_alive=0,
             format=schema,options=dict(num_ctx=selected.context,
-                num_predict=selected.output_tokens,temperature=0,seed=42),
+                num_predict=selected.output_tokens,temperature=0,seed=42,**self.execution_options),
             messages=[dict(role='system',content=prompt),dict(role='user',content=encoded)]))
         try:
             if result.get('done_reason')=='length': raise InferenceError('output_truncated')
@@ -198,7 +199,7 @@ class OllamaProvider:
         schema['$defs']['Claim']['properties']['quote']['enum']=[e['text'] for e in evidence]
         start=time.monotonic()
         result=self.request('/api/chat',dict(model=selected.model,stream=False,think=False,keep_alive=0,
-            format=schema,options=dict(num_ctx=4096,num_predict=1000,temperature=0,seed=42),
+            format=schema,options=dict(num_ctx=4096,num_predict=1000,temperature=0,seed=42,**self.execution_options),
             messages=[dict(role='system',content=prompt),dict(role='user',content=encoded)]))
         try:
             if result.get('done_reason')=='length': raise InferenceError('output_truncated')

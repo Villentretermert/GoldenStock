@@ -14,6 +14,7 @@ from goldenstock.documents import authorized_job
 from goldenstock.inference import PROFILES,inference_spec,InferenceError
 from goldenstock.knowledge import pack,retrieve
 from goldenstock.lab_scoring import encode,digest,validate_reference,counts,aggregate,POLICY
+from goldenstock.ai_resources import PENDING,choose_device,history as device_history
 
 router=APIRouter(prefix='/api/v1/lab')
 
@@ -172,7 +173,7 @@ def create_experiment(data:ExperimentRequest,request:Request):
         if old: return dict(id=old.id)
         if source.split=='holdout' and db.scalar(select(LabExperiment.id).where(LabExperiment.dataset_id==source.id).limit(1)):
             raise HTTPException(409,'Holdout already consumed; create a fresh independent dataset for new configurations')
-        pending=db.scalar(select(func.count()).select_from(AIRun).where(AIRun.owner_id==actor.id,AIRun.state.in_(['queued','running'])))
+        pending=db.scalar(select(func.count()).select_from(AIRun).where(AIRun.owner_id==actor.id,AIRun.state.in_(PENDING)))
         if pending+2*len(payload['cases'])>10: raise HTTPException(429,'Maximum ten pending AI tasks per analyst')
         row=LabExperiment(org_id=actor.org_id,owner_id=actor.id,dataset_id=source.id,fingerprint=fingerprint,manifest='',manifest_hash='')
         db.add(row);db.flush()
@@ -231,7 +232,7 @@ def experiment_view(db,row,actor):
             # No provider/model/timing fields in the blind review API or HTML.
             item['output']={k:result[k] for k in ('proposals','claims','gaps') if k in result}
         if row.revealed:
-            item.update(spec=entry['spec'],receipt=result)
+            item.update(spec=entry['spec'],receipt=result,executions=device_history(db,run))
             group=grouped.setdefault(entry['variant'],dict(profile=entry['spec']['profile'],rows=[],seconds=[],tokens=[],succeeded=0,failed=0,human_correct=0))
             case=payload['cases'][entry['case']]
             if run.state=='succeeded':
@@ -295,18 +296,20 @@ def control(key:str,action:str,request:Request):
         if row.revealed: raise HTTPException(409,'Revealed experiments are immutable')
         if action=='reveal':
             for _,run in pairs:
-                if run.state in {'queued','running'} or run.lease_until>time.time(): raise HTTPException(409,'Wait for all variants to finish')
+                if run.state in PENDING or run.lease_until>time.time(): raise HTTPException(409,'Wait for all variants to finish')
                 if run.state=='succeeded':
                     history=annotations(db,row,run)
                     if not history or history[-1].output_hash!=digest(json.loads(run.output)): raise HTTPException(409,'Review every successful answer before revealing models')
             row.revealed=True
+        elif action in {'use-cpu','check-gpu'}:
+            choose_device([r for _,r in pairs],action)
         elif action=='cancel':
             for _,run in pairs:
-                if run.state in {'queued','running'}: run.state='cancelled'
+                if run.state in PENDING: run.state='cancelled'
         elif action=='retry':
             retry=[r for _,r in pairs if r.state in {'failed','cancelled'}]
             if not retry or any(r.lease_until>time.time() for r in retry): raise HTTPException(409,'Retry unavailable while a provider call is still active')
-            pending=db.scalar(select(func.count()).select_from(AIRun).where(AIRun.owner_id==actor.id,AIRun.state.in_(['queued','running'])))
+            pending=db.scalar(select(func.count()).select_from(AIRun).where(AIRun.owner_id==actor.id,AIRun.state.in_(PENDING)))
             if pending+len(retry)>10: raise HTTPException(429,'Maximum ten pending AI tasks per analyst')
             for run in retry: run.state='queued';run.error='';run.lease_token=''
         else: raise HTTPException(404,'Unknown experiment action')

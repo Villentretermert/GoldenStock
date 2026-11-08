@@ -81,9 +81,14 @@ def mount_ai_ui(app):
         if not actor: return RedirectResponse('/login',status_code=303)
         data=run(run_id,request);output=data['result']
         body=f'<h1>AI task</h1><p>{e(data["kind"])} · {e(data["state"])} · attempts {data["attempts"]}</p><p>{e(data["error"])}</p><a href="/ai/{e(data["company_id"])}">Back to AI workspace</a>'
+        from goldenstock.ai_resources_ui import device_choice,execution_cards
         if data['kind']!='batch_proposals':
-            if data['state'] in {'queued','running'}: body+=form(f'/api/v1/ai/runs/{run_id}/cancel','Cancel task')
+            if data['state']=='awaiting_device': body+=device_choice(f'/api/v1/ai/runs/{run_id}')
+            if data['state'] in {'queued','running','awaiting_device'}: body+=form(f'/api/v1/ai/runs/{run_id}/cancel','Cancel task')
             if data['state'] in {'failed','cancelled'}: body+=form(f'/api/v1/ai/runs/{run_id}/retry','Retry task')
+        elif data.get('source_window',{}).get('batch_id'):
+            body+=f'<p><a href="/ai-batch/{e(data["source_window"]["batch_id"])}">Batch progress and device choice</a></p>'
+        body+=execution_cards(data['executions'])
         if data.get('source_window'):
             body+=source_cards(data['source_window'],collapsed=True)
         if data['state']=='succeeded':

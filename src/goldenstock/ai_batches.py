@@ -13,6 +13,7 @@ from goldenstock.documents import authorized_job
 from goldenstock.inference import PROFILES, inference_spec, InferenceError
 from goldenstock.report_sections import source_lines, sections, nearby_context, SECTION_POLICY, CONTEXT_POLICY
 from goldenstock.models import AIProposalBatch, AIRun, Company, Document, DocumentVersion, Extraction
+from goldenstock.ai_resources import PENDING,choose_device
 
 router=APIRouter(prefix='/api/v1/ai/batches')
 POLICY='gs029-pdf-batch-v1'
@@ -148,7 +149,7 @@ def lock(db):
 
 def pending(db,actor):
     return db.scalar(select(func.count()).select_from(AIRun).where(
-        AIRun.org_id==actor.org_id,AIRun.owner_id==actor.id,AIRun.state.in_(['queued','running'])))
+        AIRun.org_id==actor.org_id,AIRun.owner_id==actor.id,AIRun.state.in_(PENDING)))
 
 
 @router.post('',status_code=201)
@@ -216,10 +217,10 @@ def detail(key:str,request:Request):
         row=owned(db,AIProposalBatch,key,actor);manifest,pairs=checked(db,row,actor)
         counts=Counter(r.state for _,r in pairs)
         state=('running' if counts['running'] else 'queued') if counts['queued']+counts['running'] else (
-            'succeeded' if counts['succeeded']==len(pairs) else 'finished_with_gaps')
+            'awaiting_device' if counts['awaiting_device'] else 'succeeded' if counts['succeeded']==len(pairs) else 'finished_with_gaps')
         return dict(id=row.id,company_id=row.company_id,created=row.created,manifest=manifest,
             state=state,total=len(pairs),completed=sum(counts[s] for s in ('succeeded','failed','cancelled')),
-            counts=dict(counts),runs=[dict(entry,state=r.state,error=r.error,attempts=r.attempts,
+            counts=dict(counts),runs=[dict(entry,state=r.state,error=r.error,attempts=r.attempts,device=r.device,
                 proposal_count=len(json.loads(r.output).get('proposals',[]))) for entry,r in pairs])
 
 
@@ -228,8 +229,10 @@ def control(key:str,action:str,request:Request):
     actor=authenticate(request,True)
     with Session(request.app.state.engine) as db,db.begin():
         lock(db);row=owned(db,AIProposalBatch,key,actor,True);_,pairs=checked(db,row,actor)
-        if action=='cancel':
-            targets=[r for _,r in pairs if r.state in {'queued','running'}]
+        if action in {'use-cpu','check-gpu'}:
+            choose_device([r for _,r in pairs],action)
+        elif action=='cancel':
+            targets=[r for _,r in pairs if r.state in PENDING]
             if not targets: raise HTTPException(409,'No pending parts to cancel')
             for r in targets: r.state='cancelled'  # Preserve leases until running calls return.
         elif action=='retry':

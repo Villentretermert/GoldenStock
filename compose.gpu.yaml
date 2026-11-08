@@ -2,3 +2,7 @@
 services:
   inference:
     gpus: all
+  worker:
+    gpus: all
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: utility

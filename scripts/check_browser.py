@@ -45,6 +45,10 @@ def main():
                 input=json.dumps(dict(login=login,password=password)),text=True,check=True)
         runtime=Path.home()/'.cache/codex-runtimes/codex-primary-runtime/dependencies/node'
         env=dict(os.environ,GS_QA_LOGIN=login,GS_QA_PASSWORD=password,GS_NODE_MODULES=str(runtime/'node_modules'),GS_APP_URL='http://127.0.0.1:8081')
+        if os.environ.get('GS_QA_RESOURCES')=='1':
+            fixture=subprocess.run(DOCKER+[Path('scripts/browser_resource_fixture.py').read_text()],
+                input=json.dumps(dict(login=login,password=password)),text=True,check=True,capture_output=True)
+            env['GS_QA_DEVICE_RUN']=json.loads(fixture.stdout)['run_id']
         from extraction_fixtures import simple_pdf
         env['GS_QA_PDF']=base64.b64encode(simple_pdf()).decode('ascii')
         if os.environ.get('GS_QA_SECTIONS')=='1':

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from goldenstock.models import Job,DocumentVersion,Document,Extraction,Company
 from goldenstock.normalization import METRICS
 from goldenstock.ai_lab import datasets,dataset,experiments,experiment,prepare_case,CaseRequest
+from goldenstock.ai_resources_ui import device_choice,execution_cards
 
 
 def mount_lab_ui(app):
@@ -95,6 +96,7 @@ def mount_lab_ui(app):
         body=f'<h1>{"Model comparison" if data["revealed"] else "Blind review"}</h1><p><a href="/lab">AI Lab</a> · <a href="/lab/datasets/{e(d["id"])}">{e(d["title"])} v{d["revision"]}</a> · {e(d["split"])}</p>'
         body+='<div class="notice">Technical comparison only. A real independent benchmark and the 95% target remain unconfirmed. Missing or failed answers reduce recall; unknown cost stays unknown.</div>'
         if data['revealed']:
+            body+='<p>Execution devices and resource attempts are now visible below. Compare timing only for runs on the same device and comparable load; CPU and GPU timings are not interchangeable.</p>'
             body+='<div class="table-wrap" tabindex="0" aria-label="Model scores, scroll horizontally for all columns"><table class="sensitivity"><caption>Scores across all cases in this dataset</caption><thead><tr><th>Model</th><th>Precision</th><th>Recall</th><th>F1</th><th>Citations</th><th>Completed / failed</th><th>Seconds</th><th>Tokens</th></tr></thead><tbody>'
             def pct(value): return 'N/A' if value is None else f'{value:.1%}'
             for c in data['comparison']:
@@ -105,6 +107,8 @@ def mount_lab_ui(app):
                 if d['kind']=='proposals': body+='<p>Context accuracy among matched metrics: '+e(', '.join(k+' '+pct(v) for k,v in c['metrics']['context_accuracy'].items()))+'</p>'
             body+=f'<p><a href="/api/v1/lab/experiments/{e(key)}">Download comparison receipt (JSON)</a></p>'
         else:
+            if any(r['state']=='awaiting_device' for r in data['runs']):
+                body+=device_choice(f'/api/v1/lab/experiments/{key}',group=True)
             body+='<p>Reload for progress. Compare each answer with the source and reference; model identity and timing remain hidden.</p><div class="row">'
             for action,label in [('reveal','Reveal models and scores'),('cancel','Cancel pending variants'),('retry','Retry failed variants')]: body+=form(f'/api/v1/lab/experiments/{key}/{action}',label)
             body+='</div>'
@@ -121,6 +125,7 @@ def mount_lab_ui(app):
             if r['state']=='succeeded' and not r['output'].get('proposals',r['output'].get('claims',[])): body+='<p>No facts selected.</p>'
             for gap in r['output'].get('gaps',[]): body+='<p>Gap: '+e(gap)+'</p>'
             for a in r['annotations']: body+=f'<p>Review v{a["revision"]}: {e(a["verdict"])} — {e(a["reason"])}</p>'
+            if data['revealed']: body+=execution_cards(r['executions'])
             if r['state']=='succeeded' and not data['revealed']:
                 previous=r['annotations'][-1] if r['annotations'] else {}
                 fields=hidden('revision',previous.get('revision',0))+select_field('Judgement','verdict',[(v,v.title()) for v in ('correct','incorrect','uncertain')],previous.get('verdict'))

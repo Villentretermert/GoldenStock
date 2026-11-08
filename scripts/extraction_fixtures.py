@@ -82,3 +82,18 @@ def batch_ai_pdf():
             pdf.drawString(30,1220-line*20,'Synthetic narrative for interface testing. This line contains no additional financial metrics.')
         pdf.showPage()
     pdf.save();return output.getvalue()
+
+
+def section_ai_pdf():
+    """A title and units on one page, a metric on its continuation, and an excluded statement."""
+    from reportlab.pdfgen import canvas
+    output=io.BytesIO();pdf=canvas.Canvas(output,pagesize=(750,1300))
+    pages=[['Contents','Consolidated statements of income .... 2','Excluded cover: assets 999'],
+        ['Consolidated statements of income','USD million; year ended 2025; consolidated IFRS']+
+        ['Synthetic narrative for interface testing without additional reported financial metrics.']*48,
+        ['Profit attributable to owners 120'],['Consolidated balance sheets','Assets 900']]
+    for lines in pages:
+        pdf.setFont('Helvetica',10)
+        for n,line in enumerate(lines):pdf.drawString(30,1260-n*20,line)
+        pdf.showPage()
+    pdf.save();return output.getvalue()

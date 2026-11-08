@@ -183,7 +183,10 @@ def process_ai(engine,settings,provider=None):
         if kind.startswith('lab_'):
             from goldenstock.ai_lab import validate_lab_input
             validate_lab_input(payload,profile)
-        output=adapter.summarize(payload['evidence'],profile) if kind in {'summary','public_summary','lab_summary'} else adapter.propose(payload['evidence'],profile)
+        if kind=='batch_proposals' and 'context' in payload:
+            output=adapter.propose_context(payload['evidence'],payload['context'],profile)
+        else:
+            output=adapter.summarize(payload['evidence'],profile) if kind in {'summary','public_summary','lab_summary'} else adapter.propose(payload['evidence'],profile)
         if kind.startswith('lab_'):
             spec=payload['lab_spec']
             if any(output.get(k)!=spec[k] for k in ('model','model_digest','prompt_version','prompt_sha256')):

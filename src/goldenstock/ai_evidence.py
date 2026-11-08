@@ -5,7 +5,7 @@ SELECTION_VERSION = 'gs028-source-window-v1'
 MAX_EVIDENCE_JSON = 6000
 
 
-def source_window(items, version_id, source_sha256, offset=0, text_offset=0, stop_offset=None):
+def source_window(items, version_id, source_sha256, offset=0, text_offset=0, stop_offset=None, max_json=MAX_EVIDENCE_JSON):
     stop = len(items) if stop_offset is None else stop_offset
     if not 0 <= offset < stop <= len(items):
         raise ValueError('Evidence item not found')
@@ -30,7 +30,7 @@ def source_window(items, version_id, source_sha256, offset=0, text_offset=0, sto
                         item_index=index, source_range=[start, end], source_length=len(text))
 
         def fits(end):
-            return len(json.dumps(evidence + [entry(end)], ensure_ascii=True)) <= MAX_EVIDENCE_JSON
+            return len(json.dumps(evidence + [entry(end)], ensure_ascii=True)) <= max_json
 
         end = len(text)
         if not fits(end):

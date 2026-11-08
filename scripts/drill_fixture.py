@@ -51,7 +51,7 @@ with TestClient(app) as client:
     template.raise_for_status()
     knowledge = client.get("/api/v1/knowledge/jpm/export").json()
     assert len(knowledge["facts"]) == 1
-    batch_args=dict(job_id=original['job_id'],page_start=1,page_end=1,profile='qwen4')
+    batch_args=dict(job_id=original['job_id'],page_start=1,page_end=1,profile='qwen4',with_context=True)
     planned=client.get('/api/v1/ai/batches/preview',params=batch_args);planned.raise_for_status()
     batch=client.post('/api/v1/ai/batches',json=batch_args|dict(plan_hash=planned.json()['plan_hash']))
     batch.raise_for_status();batch_id=batch.json()['id']

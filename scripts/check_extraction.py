@@ -19,6 +19,18 @@ with tempfile.TemporaryDirectory() as directory:
     assert 'Profit' in words and '-120' in words and 'million' in words, words
     assert all(item['method']=='ocr' and item['location']['page']==1 for item in result['items'])
     assert all(0<=item['confidence']<=1 for item in result['items'])
+    from goldenstock.report_sections import source_lines,sections
+    heading_image=Image.new('RGB',(1600,500),'white')
+    draw=ImageDraw.Draw(heading_image)
+    draw.text((60,50),'Consolidated balance sheets',font=font,fill='black')
+    draw.text((60,130),'USD million. Assets 900',font=font,fill='black')
+    heading_path=root/'heading-scan.pdf';heading_image.save(heading_path,'PDF',resolution=150)
+    heading_payload=run_parser(heading_path,'.pdf',lambda:True)
+    detected=sections(source_lines(heading_payload['items']),'synthetic','0'*64,1)
+    assert len(detected)==1 and detected[0]['title']=='Consolidated balance sheets'
+    assert detected[0]['heading']['method']=='ocr'
+    assert all(s['location']['bbox_pixels'] for s in detected[0]['heading']['sources'])
+    print('PASS: scanned section title retains every OCR word locator.')
     # The scan sits in the second chunk; blank pages still count as processed.
     import pypdfium2 as pdfium
     with pdfium.PdfDocument.new() as combined, pdfium.PdfDocument(scan) as source:

@@ -179,7 +179,7 @@ def mount_ui(app):
         if result['filename'].lower().endswith('.pdf'):
             body+='<form method="get"><label>Original PDF page<input name="pdf_page" type="number" min="1" required></label><button>Go to page</button></form>'
             chosen_page=pdf_page or 1
-            body+=f'<p><a href="/ai-batch-preview?job_id={e(job_id)}&amp;page_start={chosen_page}&amp;page_end={chosen_page}">Preview this page as an AI batch</a></p>'
+            body+=f'<p><a href="/ai-batch-preview?job_id={e(job_id)}&amp;page_start={chosen_page}&amp;page_end={chosen_page}&amp;with_context=true">Preview this page as an AI batch</a> · <a href="/ai-sections?job_id={e(job_id)}">Choose section by title</a></p>'
         if pdf_page is not None and not result['items']:
             return page('Extracted evidence',body+f'<p>No extracted evidence on original page {pdf_page}.</p>',actor)
         body+='<div class="table-wrap"><table><thead><tr><th>Origin</th><th>Raw value</th><th>Method / confidence</th></tr></thead><tbody>'

@@ -64,6 +64,7 @@ try:
     batch_url='/api/v1/ai/batches/'+receipt['batch_id']
     restored_batch=admin.get(batch_url);restored_batch.raise_for_status()
     assert restored_batch.json()['manifest']==receipt['batch_manifest']
+    assert restored_batch.json()['manifest']['with_context'] is True
     assert sessions[1][0].get(batch_url).status_code==404
     assert admin.post(batch_url+'/retry').status_code==200
     for _ in range(35):

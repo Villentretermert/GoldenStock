@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from goldenstock.models import Job,DocumentVersion,Document,Extraction,AIRun
 from goldenstock.ai_runs import runs,run,PROFILES,proposal_evidence
+from goldenstock.context_ui import context_cards
 
 
 def mount_ai_ui(app):
@@ -15,12 +16,13 @@ def mount_ai_ui(app):
         return '<label>Local AI profile<select name="profile">'+''.join(f'<option value="{e(k)}">{e(p.model)}</option>' for k,p in PROFILES.items())+'</select></label>'
 
     def source_cards(selected,collapsed=False):
-        body='<h2>Source fragment</h2><p>Only the text below is sent to local AI. Check headings and year columns in the original. Missing context requires manual review.</p>'
+        body='<h2>Source fragment</h2><p>The primary evidence and any separately listed context below are sent to local AI. Check headings and year columns in the original. Missing context requires manual review.</p>'
         for item in selected['evidence']:
             index=item.get('item_index',int(item['id'].rsplit(':',1)[1]))
             span=item.get('source_range')
             range_text=f' · characters {span[0]+1}–{span[1]} of {item["source_length"]}' if span else ''
             body+=f'<article class="card"><p>{e(json.dumps(item["location"]))}{e(range_text)}</p><pre class="ai-source" style="white-space:pre-wrap;overflow-wrap:anywhere">{e(item["text"])}</pre><a href="/normalize/{e(selected["job_id"])}/{index}">Open full source item</a></article>'
+        body+=context_cards(selected,selected['job_id'])
         if collapsed:
             body='<details><summary>Saved source fragment</summary>'+body+'</details>'
         cursor=selected.get('next_cursor')
@@ -58,7 +60,8 @@ def mount_ai_ui(app):
         body+='<form method="get" action="/ai-evidence">'+fields+'<button>Preview evidence</button></form>'
         body+='<h2>Selected PDF pages</h2><p>Preview up to 25 original pages and 10 AI requests. The batch runs through the same local queue.</p>'
         pdfs=''.join(f'<option value="{e(j.id)}">{e(v.filename)} · v{v.number}</option>' for j,v in jobs if v.filename.lower().endswith('.pdf'))
-        body+='<form method="get" action="/ai-batch-preview"><label>PDF original<select name="job_id" required>'+pdfs+'</select></label><label>First original page<input name="page_start" type="number" min="1" max="1000" value="1" required></label><label>Last original page<input name="page_end" type="number" min="1" max="1000" value="1" required></label>'+profiles()+'<button>Preview page batch</button></form>'
+        body+='<form method="get" action="/ai-sections"><label>Report for section selection<select name="job_id" required>'+pdfs+'</select></label><button>Choose section by title</button></form>'
+        body+='<form method="get" action="/ai-batch-preview"><label>PDF original<select name="job_id" required>'+pdfs+'</select></label><label>First original page<input name="page_start" type="number" min="1" max="1000" value="1" required></label><label>Last original page<input name="page_end" type="number" min="1" max="1000" value="1" required></label><label>Nearby context<select name="with_context" aria-label="Nearby context"><option value="true">Add automatically with source links</option><option value="false">Selected pages only</option></select></label>'+profiles()+'<button>Preview page batch</button></form>'
         from goldenstock.ai_batches import listing
         batches=listing(request,company_id)
         if batches:
@@ -89,6 +92,11 @@ def mount_ai_ui(app):
             for p in output.get('proposals',[]):
                 index=int(p['evidence_id'].rsplit(':',1)[1])
                 body+=f'<article class="card"><h2>{e(p["metric"])}: {e(p["number_text"])}</h2><p>{e(p["quote"])}</p><p>{e(json.dumps({k:v for k,v in p.items() if k not in {"quote","metric","number_text","evidence_id"}}))}</p><a href="/normalize/{e(payload["job_id"])}/{index}">Check context and create a fact</a></article>'
+                cited=[c for c in payload.get('context',[]) if c['id'] in p.get('context_ids',[])]
+                if cited: body+=context_cards(dict(context=cited),payload['job_id'])
+                if 'context' in payload:
+                    missing=[k for k in ('currency','scale','period') if p.get(k) is None]
+                    if missing: body+='<p class="notice">Still missing: '+e(', '.join(missing))+'. Check the source context before creating a fact.</p>'
             if data['kind'] in {'summary','public_summary'}:
                 body+=f'<p>Latest input period: {e(data["as_of"])}</p>'
                 if data['kind']=='summary': body+=f'<p>{"Current inputs" if data["current"] else "Stale — inputs changed"} · {data["blocker_count"]} conflicts</p>'

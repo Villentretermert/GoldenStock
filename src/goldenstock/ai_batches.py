@@ -11,10 +11,12 @@ from goldenstock.ai_evidence import source_window
 from goldenstock.auth import authenticate, audit
 from goldenstock.documents import authorized_job
 from goldenstock.inference import PROFILES, inference_spec, InferenceError
+from goldenstock.report_sections import source_lines, sections, nearby_context, SECTION_POLICY, CONTEXT_POLICY
 from goldenstock.models import AIProposalBatch, AIRun, Company, Document, DocumentVersion, Extraction
 
 router=APIRouter(prefix='/api/v1/ai/batches')
 POLICY='gs029-pdf-batch-v1'
+CONTEXT_BATCH_POLICY='gs030-context-batch-v1'
 MAX_WINDOWS=10
 MAX_PAGES=25
 
@@ -34,7 +36,7 @@ def digest(value):
     return hashlib.sha256(encode(value).encode()).hexdigest()
 
 
-def page_windows(payload,version_id,source_hash,page_start,page_end):
+def page_windows(payload,version_id,source_hash,page_start,page_end,*,max_json=6000):
     items=payload['items']
     total=payload.get('coverage',{}).get('total_pages') or max(
         (i.get('location',{}).get('page',0) for i in items),default=0)
@@ -49,7 +51,7 @@ def page_windows(payload,version_id,source_hash,page_start,page_end):
     for first,stop in segments:
         cursor=dict(offset=first,text_offset=0)
         while cursor:
-            part=source_window(items,version_id,source_hash,**cursor,stop_offset=stop)
+            part=source_window(items,version_id,source_hash,**cursor,stop_offset=stop,max_json=max_json)
             cursor=part['next_cursor']
             if part['evidence']:
                 windows.append(part)
@@ -60,28 +62,72 @@ def page_windows(payload,version_id,source_hash,page_start,page_end):
                 empty_pages=[p for p in range(page_start,page_end+1) if p not in covered])
 
 
-def selection(db,actor,job_id,page_start,page_end,profile):
-    if profile not in PROFILES: raise HTTPException(422,'Unknown local profile')
+def document_source(db,actor,job_id):
     job=authorized_job(db,job_id,actor)
     version=owned(db,DocumentVersion,job.version_id,actor)
     if not version.filename.lower().endswith('.pdf'): raise HTTPException(422,'Page batches require a PDF original')
     extracted=db.get(Extraction,version.id)
     if not extracted: raise HTTPException(409,'Extract the complete original first')
-    try: plan=page_windows(json.loads(extracted.payload),version.id,extracted.source_sha256,page_start,page_end)
+    return job,version,extracted
+
+
+def catalog(payload,version,extracted):
+    lines=source_lines(payload['items'])
+    total=payload.get('coverage',{}).get('total_pages') or max((x['page'] for x in lines),default=0)
+    return lines,sections(lines,version.id,extracted.source_sha256,total),total
+
+
+@router.get('/sections')
+def section_catalog(request:Request,job_id:str):
+    actor=authenticate(request)
+    with Session(request.app.state.engine) as db:
+        job,version,extracted=document_source(db,actor,job_id)
+        try: _,found,total=catalog(json.loads(extracted.payload),version,extracted)
+        except ValueError as exc: raise HTTPException(422,str(exc)) from None
+        return dict(job_id=job.id,version_id=version.id,filename=version.filename,
+            company_id=db.get(Document,version.document_id).company_id,
+            sections=found,total_pages=total,policy=SECTION_POLICY)
+
+
+def selection(db,actor,job_id,page_start,page_end,profile,section_id=None,with_context=False):
+    if profile not in PROFILES: raise HTTPException(422,'Unknown local profile')
+    job,version,extracted=document_source(db,actor,job_id)
+    payload=json.loads(extracted.payload)
+    selected=None;lines=[]
+    try:
+        if section_id or with_context:
+            lines,found,_=catalog(payload,version,extracted)
+            if section_id:
+                selected=next((s for s in found if s['id']==section_id),None)
+                if not selected: raise HTTPException(404,'Section no longer found; choose it again')
+                page_start,page_end=selected['page_start'],selected['page_end']
+        plan=page_windows(payload,version.id,extracted.source_sha256,page_start,page_end,
+                          max_json=4200 if with_context else 6000)
+        if with_context:
+            for window in plan['windows']:
+                first=window['evidence'][0]
+                active=[s for s in found if s['page_start']<=first['location']['page']<=s['page_end']
+                    and (s['heading']['sources'][0]['item_index'],s['heading']['sources'][0]['source_range'][0])
+                    <= (first['item_index'],first['source_range'][1])]
+                context_section=selected or (active[-1] if active else None)
+                window.update(nearby_context(window,lines,version.id,extracted.source_sha256,context_section))
+            plan.update(with_context=True,context_policy=CONTEXT_POLICY)
+        if selected:
+            plan.update(section=selected,section_policy=SECTION_POLICY)
     except ValueError as exc: raise HTTPException(422,str(exc)) from None
-    plan.update(policy=POLICY,job_id=job.id,version_id=version.id,filename=version.filename,
+    plan.update(policy=CONTEXT_BATCH_POLICY if with_context else POLICY,job_id=job.id,version_id=version.id,filename=version.filename,
         company_id=db.get(Document,version.document_id).company_id,source_sha256=extracted.source_sha256,
         parser_version=extracted.parser_version,page_start=page_start,page_end=page_end,
-        spec=inference_spec('proposals',profile))
+        spec=inference_spec('context_proposals' if with_context else 'proposals',profile))
     return plan
 
 
 @router.get('/preview')
 def preview(request:Request,job_id:str,page_start:int=Query(1,ge=1,le=1000),
-            page_end:int=Query(1,ge=1,le=1000),profile:str='qwen4'):
+            page_end:int=Query(1,ge=1,le=1000),profile:str='qwen4',section_id:str|None=None,with_context:bool=False):
     actor=authenticate(request)
     with Session(request.app.state.engine) as db:
-        plan=selection(db,actor,job_id,page_start,page_end,profile)
+        plan=selection(db,actor,job_id,page_start,page_end,profile,section_id,with_context)
         return dict(plan,plan_hash=digest(plan))
 
 
@@ -91,6 +137,8 @@ class BatchRequest(BaseModel):
     page_start:int=Field(ge=1,le=1000)
     page_end:int=Field(ge=1,le=1000)
     profile:str='qwen4'
+    section_id:str|None=Field(default=None,max_length=28)
+    with_context:bool=False
     plan_hash:str=Field(pattern=r'^[0-9a-f]{64}$')
 
 
@@ -108,7 +156,7 @@ def create(data:BatchRequest,request:Request):
     actor=authenticate(request,True)
     with Session(request.app.state.engine) as db,db.begin():
         lock(db)
-        plan=selection(db,actor,data.job_id,data.page_start,data.page_end,data.profile)
+        plan=selection(db,actor,data.job_id,data.page_start,data.page_end,data.profile,data.section_id,data.with_context)
         fingerprint=digest(plan)
         if fingerprint!=data.plan_hash: raise HTTPException(409,'Preview changed; refresh before starting the batch')
         old=db.scalar(select(AIProposalBatch).where(AIProposalBatch.org_id==actor.org_id,
@@ -121,8 +169,9 @@ def create(data:BatchRequest,request:Request):
             version_id=plan['version_id'],fingerprint=fingerprint,manifest='',manifest_hash='')
         db.add(row);db.flush();entries=[]
         for index,window in enumerate(plan['windows']):
-            frozen=dict(window,batch_id=row.id,batch_spec=plan['spec'],batch_policy=POLICY,
+            frozen=dict(window,batch_id=row.id,batch_spec=plan['spec'],batch_policy=plan['policy'],
                         job_id=plan['job_id'],version_id=plan['version_id'])
+            if plan.get('section'): frozen['section']=plan['section']
             run=AIRun(org_id=actor.org_id,owner_id=actor.id,company_id=row.company_id,
                 kind='batch_proposals',profile=data.profile,input=encode(frozen),
                 fingerprint=digest(dict(batch=row.id,position=index,input=frozen)))
@@ -195,7 +244,11 @@ def control(key:str,action:str,request:Request):
 
 
 def validate_batch_input(payload,profile,engine,actor,run_id):
-    if payload.get('batch_policy')!=POLICY or payload.get('batch_spec')!=inference_spec('proposals',profile):
+    contextual=payload.get('batch_policy')==CONTEXT_BATCH_POLICY
+    if (payload.get('batch_policy') not in {POLICY,CONTEXT_BATCH_POLICY} or
+        ('context' in payload)!=contextual or
+        (contextual and payload.get('context_policy')!=CONTEXT_POLICY) or
+        payload.get('batch_spec')!=inference_spec('context_proposals' if contextual else 'proposals',profile)):
         raise InferenceError('batch_configuration_changed')
     try:
         with Session(engine) as db:

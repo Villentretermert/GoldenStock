@@ -23,6 +23,61 @@ let browser;
  await page.getByLabel('Password',{exact:true}).fill(process.env.GS_QA_PASSWORD);
  await page.getByRole('button',{name:'Sign in',exact:true}).click();
  await page.getByRole('heading',{name:'Your watchlist',exact:true}).waitFor();
+ if(process.env.GS_QA_SECTION_PDF){
+   await page.goto(base+'/files?company_id=nu');
+   const name='synthetic-report-sections.pdf';
+   await page.getByLabel('Original file').setInputFiles({name,mimeType:'application/pdf',buffer:Buffer.from(process.env.GS_QA_SECTION_PDF,'base64')});
+   await page.getByRole('button',{name:'Upload private original'}).click();
+   const card=page.locator('div.card').filter({has:page.getByRole('heading',{name,exact:true})});await card.waitFor();
+   for(const [role,title] of [['button','Extract English document'],['link','View extracted evidence']]){
+     const action=card.getByRole(role,{name:title,exact:true});
+     for(let attempt=0;attempt<40&&!await action.count();attempt++){
+       await page.reload({waitUntil:'networkidle'});if(!await action.count())await new Promise(r=>setTimeout(r,750));
+     }
+     await action.click();
+   }
+   await page.getByRole('link',{name:'Choose section by title',exact:true}).click();
+   await page.getByLabel('Find title',{exact:true}).fill('income');
+   await page.getByRole('button',{name:'Find sections',exact:true}).click();
+   const selected=await page.getByLabel('Section',{exact:true}).inputValue();
+   if(await page.getByLabel('Section',{exact:true}).locator('option').count()!==1)throw Error('TOC entry became a section');
+   await page.screenshot({path:'design/previews/report-sections.png'});
+   await page.getByRole('button',{name:'Preview section',exact:true}).click();
+   await page.getByRole('heading',{name:'Consolidated statements of income',exact:true}).waitFor();
+   await page.locator('details').last().locator('summary').click();
+   await page.screenshot({path:'design/previews/section-context.png'});
+   await page.setViewportSize({width:390,height:900});
+   await page.screenshot({path:'design/previews/section-context-mobile.png'});
+   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Section preview overflow');
+   await page.setViewportSize({width:1440,height:1000});
+   await page.getByRole('button',{name:'Start selected-page batch',exact:true}).click();
+   await page.waitForURL('**/ai-batch/*');
+   const key=new URL(page.url()).pathname.split('/').pop();let batch;
+   for(let attempt=0;attempt<180;attempt++){
+     batch=await(await page.request.get(base+'/api/v1/ai/batches/'+key)).json();
+     if(batch.completed===batch.total)break;await new Promise(r=>setTimeout(r,1000));
+   }
+   if(batch.state!=='succeeded'||batch.manifest.section.id!==selected)throw Error('Section batch failed: '+JSON.stringify(batch.runs));
+   let target;
+   for(const part of batch.runs){
+     const run=await(await page.request.get(base+'/api/v1/ai/runs/'+part.run_id)).json();
+     if(run.source_window.evidence.some(e=>![2,3].includes(e.location.page)))throw Error('Wrong section reached provider');
+     if(run.result.proposals.some(p=>p.metric==='profit'&&p.number_text==='120'))target=run;
+   }
+   if(!target||!target.source_window.context.some(c=>c.text.includes('USD million')))throw Error('Continuation lost its sourced context');
+   const p=target.result.proposals.find(p=>p.metric==='profit'&&p.number_text==='120');
+   if(!p.context_ids.length||p.context_ids.some(id=>!target.source_window.context.some(c=>c.id===id)))throw Error('Missing or invalid context citation');
+   // Nullable fields are a valid abstention. Record the quality gap separately from UI delivery.
+   if((p.currency!==null&&p.currency!=='USD')||(p.scale!==null&&p.scale!=='millions'))throw Error('Unsupported synthetic context value: '+JSON.stringify(p));
+   console.log('Synthetic context quality probe (not GS-004): '+JSON.stringify({currency:p.currency,scale:p.scale,period:p.period,
+     allExpectedFields:p.currency==='USD'&&p.scale==='millions'&&String(p.period).includes('2025')}));
+   await page.goto(base+'/ai-run/'+target.id);
+   await page.locator('summary').filter({hasText:'Saved source fragment'}).click();
+   await page.screenshot({path:'design/previews/section-context-result.png'});
+   await page.getByRole('link',{name:/Context source/}).first().click();
+   await page.getByRole('heading',{name:'Normalize evidence',exact:true}).waitFor();
+   console.log('Report sections UI PASS: sourced title, inferred pages, separate context links, local Qwen on continuation and desktop/mobile.');
+ }
  if(process.env.GS_QA_AI_BATCH_PDF){
    await page.goto(base+'/files?company_id=nu');
    const name='synthetic-selected-pages.pdf';
@@ -41,6 +96,7 @@ let browser;
    await page.goto(base+'/ai/nu');
    await page.getByLabel('First original page',{exact:true}).fill('2');
    await page.getByLabel('Last original page',{exact:true}).fill('3');
+   await page.getByLabel('Nearby context',{exact:true}).selectOption('false');
    await page.getByRole('button',{name:'Preview page batch',exact:true}).click();
    await page.getByText('2 AI requests',{exact:false}).waitFor();
    if((await page.locator('main').innerText()).includes('Excluded cover'))throw Error('Batch contains outside page');

@@ -47,6 +47,9 @@ def main():
         env=dict(os.environ,GS_QA_LOGIN=login,GS_QA_PASSWORD=password,GS_NODE_MODULES=str(runtime/'node_modules'),GS_APP_URL='http://127.0.0.1:8081')
         from extraction_fixtures import simple_pdf
         env['GS_QA_PDF']=base64.b64encode(simple_pdf()).decode('ascii')
+        if os.environ.get('GS_QA_SECTIONS')=='1':
+            from extraction_fixtures import section_ai_pdf
+            env['GS_QA_SECTION_PDF']=base64.b64encode(section_ai_pdf()).decode('ascii')
         if os.environ.get('GS_QA_AI_BATCHES')=='1':
             from extraction_fixtures import batch_ai_pdf
             env['GS_QA_AI_BATCH_PDF']=base64.b64encode(batch_ai_pdf()).decode('ascii')

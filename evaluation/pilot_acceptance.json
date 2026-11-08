@@ -1,6 +1,6 @@
 {
   "policy": "gs024-v1",
-  "candidate_commit": "58136f0b42073cd71ee565df02b238965804bd0a",
+  "candidate_commit": "37369078d458433525dd671bfce646a80093bda7",
   "as_of": "2026-11-08",
   "open_critical_defects": 0,
   "gates": [
@@ -10,9 +10,9 @@
       "method": "automated",
       "data_kind": "synthetic",
       "reviewer": "GitHub Actions",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42500401750",
-      "candidate_commit": "58136f0b42073cd71ee565df02b238965804bd0a",
-      "note": "Published candidate Linux CI: 306 passed, 1 skipped; OCR verified separately in Docker. PostgreSQL, service isolation and encrypted recovery passed. Local Chrome verified explicit CPU with real Qwen and zero VRAM, GPU page batches with frozen context, desktop/mobile and 15 baseline scenarios. Context diagnostic remains qualityPassed=false."
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42529344943",
+      "candidate_commit": "37369078d458433525dd671bfce646a80093bda7",
+      "note": "Published candidate Linux CI: 348 passed, 1 skipped; OCR verified separately in Docker. PostgreSQL concurrency, service isolation and encrypted recovery passed. Local Chrome verified SEC previous/new comparisons, unchanged-source history, navigation, desktop/mobile and 15 baseline scenarios. Browser source downloads used retained SEC snapshots; no new live-network poll is claimed. Synthetic technical checks do not establish real AI quality."
     },
     {
       "id": "five_company_journey",
@@ -20,8 +20,8 @@
       "method": "automated",
       "data_kind": "synthetic",
       "reviewer": "GitHub Actions",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42500401750",
-      "candidate_commit": "58136f0b42073cd71ee565df02b238965804bd0a",
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42529344943",
+      "candidate_commit": "37369078d458433525dd671bfce646a80093bda7",
       "note": "Candidate CI passed five synthetic PDF journeys through parser, review, snapshot, calculation, valuation and three exports. Real-company methodology remains pending."
     },
     {
@@ -30,9 +30,9 @@
       "method": "automated",
       "data_kind": "synthetic",
       "reviewer": "GitHub Actions",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42500401750",
-      "candidate_commit": "58136f0b42073cd71ee565df02b238965804bd0a",
-      "note": "Candidate CI restored schema 0018, 35 tables and four files to a clean Docker project, with 15 HTTPS sessions. Private AI execution history and batch manifests matched; explicit CPU and isolated inference outage were checked. PDF resumed from page 26. External media and field acceptance remain pending."
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/42529344943",
+      "candidate_commit": "37369078d458433525dd671bfce646a80093bda7",
+      "note": "Candidate CI restored schema 0020, 38 tables and four files to a clean Docker project, with 15 HTTPS sessions. SEC source history and private notification, original annotation XLSX and approval, AI execution history and batch manifests matched; explicit CPU and isolated inference outage were checked. PDF resumed from page 26. External media and field acceptance remain pending."
     },
     {
       "id": "source_coverage",

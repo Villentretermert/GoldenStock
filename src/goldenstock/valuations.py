@@ -13,6 +13,7 @@ from goldenstock.calculations import StrictModel,private_run,verified_payload
 from goldenstock.reviews import state as review_state
 from goldenstock.calculation_engine import ENGINE,canonical,checksum,parse_number
 from goldenstock.valuation_engine import POLICY,contract,input_fields,value_scenarios,bound_number
+from goldenstock.valuation_summary import summarize
 
 router=APIRouter(prefix='/api/v1/valuations')
 
@@ -179,7 +180,8 @@ def detail(run_id:str,request:Request):
     actor=authenticate(request)
     with Session(request.app.state.engine) as db:
         row=owned_valuation(db,actor,run_id);data,result=read_receipt(row)
-        return dict(receipt(row),input=data,result=result,inputs_current=source_current(db,actor,row.company_id,data['source']))
+        current=source_current(db,actor,row.company_id,data['source'])
+        return dict(receipt(row),input=data,result=result,inputs_current=current,scenario_summary=summarize(data,result,current))
 
 
 @router.post('/{run_id}/replay')

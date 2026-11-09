@@ -602,7 +602,7 @@ let browser;
            if(name!=='base')await page.locator('[name="enable.'+name+'"]').check();
            for(const [key,value] of Object.entries(values)){
              if(method==='pe'&&key==='profit_owners')await page.locator('[name="'+name+'.'+key+'.source_key"]').selectOption('profit_owners');
-             else await page.locator('[name="'+name+'.'+key+'.value"]').fill(value);
+             else await page.locator('[name="'+name+'.'+key+'.value"]').fill(method==='pe'&&key==='multiple'?(name==='stress'?'5':name==='optimistic'?'15':value):value);
              await page.locator('[name="'+name+'.'+key+'.note"]').fill('Synthetic confirmed input and scope');
            }
          }
@@ -618,6 +618,27 @@ let browser;
          const val=await(await page.request.get(base+'/api/v1/valuations/'+valId)).json();
          const expected=method==='pe'?'90.00':method==='pb'?'120.00':'100.00';
          if(val.result.state!=='calculated'||val.result.scenarios.base.values.per_share.display!==expected)throw Error('Valuation mismatch '+method);
+         await page.getByRole('heading',{name:'Scenario valuation range',exact:true}).waitFor();
+         if(val.scenario_summary.method!==method)throw Error('Mixed valuation methods');
+         if(method==='pe'){
+           if(val.scenario_summary.status!=='range'||val.scenario_summary.metrics.per_share.low.value!=='45'||val.scenario_summary.metrics.per_share.high.value!=='135')throw Error('Incorrect saved scenario range');
+           await page.locator('#scenario-range').getByText('45.00 – 135.00',{exact:true}).waitFor();
+           await page.locator('#scenario-range').getByText('450.00 – 1,350.00',{exact:true}).waitFor();
+           const range=await page.locator('#scenario-range').boundingBox();
+           const download=await page.getByRole('heading',{name:'Download this valuation',exact:true}).boundingBox();
+           if(range.y>=download.y)throw Error('Range is not first');
+           await page.screenshot({path:'design/previews/valuation-range-desktop.png'});
+           await page.setViewportSize({width:390,height:900});
+           await page.locator('#scenario-range').screenshot({path:'design/previews/valuation-range-mobile.png'});
+           if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Scenario range mobile overflow');
+           await page.getByText('Exact bounds and scenario assumptions',{exact:true}).click();
+           await page.locator('#scenario-range').getByRole('heading',{name:'Stress',exact:true}).waitFor();
+           await page.getByText('Exact bounds and scenario assumptions',{exact:true}).click();
+           await page.setViewportSize({width:1440,height:1000});
+         }else{
+           if(val.scenario_summary.status!=='single')throw Error('A single scenario was presented as a range');
+           await page.getByText('Single scenario — range unavailable.',{exact:true}).waitFor();
+         }
          if(method==='pe'&&val.result.scenarios.base.values.ltv_contribution.display!=='16.67')throw Error('LTV mismatch');
          await page.getByRole('button',{name:'Verify valuation reproducibility',exact:true}).click();
          await page.getByRole('status').filter({hasText:'Valuation replay matched'}).waitFor();

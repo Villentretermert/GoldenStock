@@ -27,6 +27,7 @@ label{display:block;margin:10px 0 16px}label input,label select{display:block;ma
 .login{max-width:460px;margin:60px auto}.login h1{font-size:34px}.notice{border-left:3px solid #b58a39;padding:12px 18px;background:#f8f1df;margin:18px 0}
 #message{color:#9b2929;white-space:pre-wrap}.table-wrap{overflow-x:auto}td,th{padding:12px;text-align:left;vertical-align:top;border-bottom:1px solid #d8e0d6}td{max-width:600px;overflow-wrap:anywhere}
 textarea{display:block;width:100%;max-width:100%;font:inherit;padding:10px;border:1px solid #b8c7b9;border-radius:5px}.sensitivity td,.sensitivity th{white-space:nowrap;overflow-wrap:normal}.valuation-price{font-size:32px;margin:12px 0;color:#285641}.template-map{min-width:760px} input.check{width:auto;display:inline}fieldset{border:1px solid #d8e0d6;border-radius:8px;margin:16px 0;padding:16px;min-width:0}
+.valuation-summary h2{margin-top:16px}.valuation-range{font-size:clamp(22px,3vw,32px);color:#285641;margin:12px 0;overflow-wrap:anywhere;font-weight:bold}
 @media(max-width:600px){h1{font-size:30px}header{padding:16px 22px;gap:12px}main{padding:22px 16px}.card{padding:18px}nav{gap:12px;font-size:14px}}
 '''
 JS = r'''

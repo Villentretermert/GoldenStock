@@ -5,10 +5,49 @@ from fastapi.responses import RedirectResponse
 from goldenstock.calculations import detail as calculation_detail
 from goldenstock.valuations import listing,detail
 from goldenstock.valuation_engine import METHODS,input_fields
+from goldenstock.valuation_summary import METHOD_LABELS
 
 
 def mount_valuations_ui(app):
     from goldenstock.ui import page,e,hidden,form,actor_or_none
+
+    def summary_panel(data):
+        summary=data['scenario_summary'];payload=data['input'];currency=payload['currency']
+        review={'historical':'Historical result: source review changed.',
+                'reviewed_snapshot':'Source facts still match the reviewed snapshot.',
+                'manual_assumptions':'Manual assumptions: no verified fact snapshot.'}[summary['review_status']]
+        body='<section class="card valuation-summary" id="scenario-range"><span class="tag">'+e(METHOD_LABELS[data['method']])+'</span><h2>Scenario valuation range</h2>'
+        body+='<p>'+e(review)+' Independent model approval is pending.</p>'
+        if summary['status']=='unavailable':
+            body+='<p role="alert"><strong>Range unavailable.</strong> Every included scenario must have complete, usable saved results. Review the scenario details below.</p>'
+        else:
+            if summary['status']=='single': body+='<p><strong>Single scenario — range unavailable.</strong> The saved base estimate is shown below.</p>'
+            else: body+='<p>'+str(summary['scenario_count'])+' saved scenarios · Bounds are scenario outcomes, not a confidence interval.</p>'
+            body+='<div class="grid">'
+            for metric,label,unit in [('per_share','Price per common share',currency+' / share'),('equity_value','Common equity value',currency)]:
+                values=summary['metrics'][metric]
+                shown=values['base']['display'] if summary['status']=='single' else values['low']['display']+' – '+values['high']['display']
+                body+='<section><h3>'+label+'</h3><p class="valuation-range">'+e(shown)+'</p><p>'+e(unit)+' · full currency units</p>'
+                if summary['status']=='range':
+                    body+='<p>Base: <strong>'+e(values['base']['display'])+' '+e(unit)+'</strong></p>'
+                    body+='<p>Low: '+e(', '.join(values['low']['scenarios']))+' · High: '+e(', '.join(values['high']['scenarios']))+'</p>'
+                    if values['same_value']: body+='<p>All included scenarios give the same value.</p>'
+                    elif values['same_display']: body+='<p>Rounded boundaries coincide; exact bounds differ.</p>'
+                body+='</section>'
+            body+='</div><details><summary>Exact bounds and scenario assumptions</summary>'
+            for metric,label in [('per_share','Price per common share'),('equity_value','Common equity value')]:
+                values=summary['metrics'][metric]
+                body+='<p style="overflow-wrap:anywhere">'+label+': '+e(values['low']['value'])+' – '+e(values['high']['value'])+' '+e(currency+(' / share' if metric=='per_share' else ''))+'</p>'
+            fields=input_fields(data['method'],currency,payload['reference_year'])
+            for name,inputs in payload['scenarios'].items():
+                body+='<h3>'+e(name.title())+'</h3><div class="table-wrap"><table><tr><th>Assumption</th><th>Saved value / unit</th><th>Analyst explanation</th></tr>'
+                for field in fields:
+                    item=inputs[field['key']]
+                    body+='<tr><td>'+e(field['definition'])+'</td><td>'+e(item['value'])+' '+e(field['unit'])+'</td><td>'+e(item['note'])+'</td></tr>'
+                body+='</table></div>'
+            body+='</details>'
+        body+='<p><a href="#method-scope">Method and reporting perimeter</a> · Sensitivity is shown separately below.</p></section>'
+        return body
 
     @app.get('/valuations')
     def library(request:Request):
@@ -73,16 +112,29 @@ def mount_valuations_ui(app):
         if not actor: return RedirectResponse('/login',status_code=303)
         data=detail(run_id,request);payload=data['input'];result=data['result'];currency=payload['currency']
         body=f'<h1>{e(data["title"])}</h1><p>{e(METHODS[data["method"]])} · {currency} · as of {e(payload["valuation_date"])}</p>'
+        body+=summary_panel(data)
         body+='<div class="notice">'+('<strong>Source review changed. Create a new calculation and valuation.</strong><br>' if data['inputs_current'] is False else '')+'<br>'.join(e(w) for w in payload['warnings'])+'</div>'
         body+='<p><a href="/calculations/'+e(data['calculation_id'])+'">Open source calculation</a> · <a href="/valuations/new?calculation_id='+e(data['calculation_id'])+'">Evaluate another method</a></p>'
         body+=form('/api/v1/valuations/'+run_id+'/replay','Verify valuation reproducibility',next='/valuations/'+run_id+'?replayed=1')
-        if result['state'] != 'blocked':
+        if result['state'] != 'blocked' and data['scenario_summary']['status']!='unavailable':
             body+='<section class="card"><h2>Download this valuation</h2><p>All files use this saved version. XLSX is an editable calculation; PDF and PPTX contain the saved results and source appendix.</p><p>'
             body+=' · '.join(f'<a download href="/api/v1/valuations/{e(run_id)}/export/{kind}">Download {kind.upper()}</a>' for kind in ('xlsx','pdf','pptx'))
             body+='</p><p>Source review status is checked at export. Files remain private until you share them.</p></section>'
         if request.query_params.get('replayed')=='1': body+='<p role="status">Valuation replay matched the saved result.</p>'
+        # A failed/incomplete set must not look like a usable range of selected successes.
+        scenarios=result['scenarios'] if data['scenario_summary']['status']!='unavailable' else {}
+        if not scenarios:
+            body+='<section class="card"><h2>Scenario checks</h2>'
+            retained=result.get('scenarios');retained=retained if isinstance(retained,dict) else {}
+            for name in payload['scenarios']:
+                saved=retained.get(name)
+                message='Missing or incomplete saved result'
+                if isinstance(saved,dict) and saved.get('state')=='blocked': message='Blocked: '+', '.join(saved.get('errors',[]))
+                elif isinstance(saved,dict) and saved.get('state')=='calculated': message='Saved result retained; the complete scenario set is unavailable'
+                body+='<p>'+e(name.title())+': '+e(message)+'</p>'
+            body+='</section>'
         body+='<div class="grid" style="margin-top:20px">'
-        for name,scenario in result['scenarios'].items():
+        for name,scenario in scenarios.items():
             body+=f'<article class="card"><h2>{e(name.title())}</h2>'
             if scenario['state']=='blocked': body+='<p role="alert">Blocked: '+e('; '.join(scenario['errors']).replace('_',' '))+'</p>'
             else:
@@ -92,7 +144,7 @@ def mount_valuations_ui(app):
                 if 'terminal_share' in values: body+=f'<p>Terminal contribution: {Decimal(values["terminal_share"]["value"])*100:.2f}%</p>'
             body+='</article>'
         body+='</div>'
-        for name,scenario in result['scenarios'].items():
+        for name,scenario in scenarios.items():
             if scenario['state']=='blocked': continue
             body+=f'<section class="card"><h2>{e(name.title())}: sensitivity</h2>'
             if data['method'] in ('ddm','fcfe'):
@@ -116,7 +168,7 @@ def mount_valuations_ui(app):
                 body+=f'<p><strong>{e(key)}</strong>: {e(item["value"])} · {e(item["source"])}<br>{e(item["note"])}</p>'
                 if item.get('source_key'): body+=f'<p>Source: {e(item["source_key"])} — {e(item["source_definition"])}</p>'
             body+='</details></section>'
-        body+='<section class="card"><h2>Method and reporting perimeter</h2>'
+        body+='<section class="card" id="method-scope"><h2>Method and reporting perimeter</h2>'
         for key in ('method_note','scope_note','shares_note','operating_note'):
             if payload.get(key): body+='<p>'+e(payload[key])+'</p>'
         if payload['operating']: body+='<p>Operating month: '+e(payload['operating_month'])+'. User contribution LTV is separate from company equity.</p>'

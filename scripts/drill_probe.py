@@ -59,6 +59,15 @@ try:
     template = receipt["template"]
     path = f'/api/v1/templates/{template["template_id"]}/versions/{template["id"]}/original'
     assert hashlib.sha256(admin.get(path).content).hexdigest() == receipt["template_sha"]
+    assert admin.get('/api/v1/template-updates').json()['items']==[receipt['template_update']]
+    for peer,_ in sessions[1:]:
+        update=peer.get('/api/v1/template-updates').json()['items']
+        assert len(update)==1 and update[0]['publication_id']==receipt['template_update']['publication_id']
+        assert update[0]['read_at'] is None and update[0]['detail']==receipt['template_update']['detail']
+        assert peer.get(path).status_code==404
+    assert sessions[1][0].post('/api/v1/template-updates/'+receipt['template_update']['id']+'/read').status_code==404
+    private_update=sessions[1][0].get('/api/v1/template-updates').json()['items'][0]
+    sessions[1][0].post('/api/v1/template-updates/'+private_update['id']+'/read').raise_for_status()
     knowledge = admin.get("/api/v1/knowledge/jpm/export").json()
     assert len(knowledge["facts"]) == 1 and knowledge["state_hash"] == receipt["knowledge_hash"]
     labels=receipt['lab_exchange'];import_url='/api/v1/lab/exchange/imports/'+labels['import_id']
@@ -135,7 +144,7 @@ try:
     timings = sorted(item[1] for item in sessions)
     print(json.dumps(dict(concurrent_accounts=len(sessions), scenario="HTTPS login, session and catalog",
                           p50_ms=round(timings[7]), p95_ms=round(timings[math.ceil(.95*15)-1]),
-                          original=True, template=True, reviewed_knowledge=True, lab_exchange_restored=True, sec_history_restored=True, ai_batch_restored=True, ai_execution_history_restored=True, explicit_cpu=True, pdf_checkpoint_resumed=True, revoked_session_denied=True,
+                          original=True, template=True, template_publications_restored=True, reviewed_knowledge=True, lab_exchange_restored=True, sec_history_restored=True, ai_batch_restored=True, ai_execution_history_restored=True, explicit_cpu=True, pdf_checkpoint_resumed=True, revoked_session_denied=True,
                           old_session_denied=True, inference_outage_isolated=True)))
 finally:
     for session, _ in sessions:

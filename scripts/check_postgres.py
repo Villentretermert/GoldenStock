@@ -70,6 +70,46 @@ def check_pdf_resume(app, client):
     print('PDF PostgreSQL PASS: checkpoint survives concurrent cancellation, stale write fenced, resume preserves 26 original pages.')
 
 
+def check_template_publications(app,client,password):
+    from goldenstock.models import TemplatePublication,TemplateNotification
+    author=client.get('/api/v1/auth/me').json()
+    with Session(app.state.engine) as db,db.begin():
+        user=db.get(User,author['id'])
+        db.add(User(org_id=user.org_id,login='publication-peer',password_hash=user.password_hash))
+    with TestClient(app) as peer:
+        peer.headers['origin']='http://testserver'
+        auth=peer.post('/api/v1/auth/login',json=dict(login='publication-peer',password=password));auth.raise_for_status()
+        peer.headers['x-csrf-token']=auth.json()['csrf']
+        demo=client.get('/api/v1/templates/demo').content
+        def upload(session,key):
+            r=session.post('/api/v1/templates',headers={'Idempotency-Key':key},data={'title':'Synthetic publication concurrency'},files={'file':('template.xlsx',demo)})
+            r.raise_for_status();return r.json()['template_id']
+        first,second=upload(client,'pg-publish-author'),upload(peer,'pg-publish-peer')
+        def publish(session,tid,revision=1):
+            return session.patch('/api/v1/templates/'+tid+'/visibility',json=dict(shared=True,revision=revision))
+        # Two authors hold their own user locks; fanout must not request cross-user FK locks.
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            a=pool.submit(publish,client,first);b=pool.submit(publish,peer,second)
+            assert a.result(timeout=20).status_code==b.result(timeout=20).status_code==200
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            repeated=list(pool.map(lambda _:publish(client,first,2),range(4)))
+        assert sorted(r.status_code for r in repeated)==[200,409,409,409]
+        with Session(app.state.engine) as db:
+            pubs=list(db.scalars(select(TemplatePublication).where(TemplatePublication.template_id.in_([first,second]))))
+            assert len(pubs)==2
+            receipts=list(db.scalars(select(TemplateNotification).where(TemplateNotification.publication_id.in_([p.id for p in pubs]))))
+            assert len(receipts)==4
+        items=[i for i in peer.get('/api/v1/template-updates').json()['items'] if i['template_id']==first]
+        assert len(items)==1
+        read_url='/api/v1/template-updates/'+items[0]['id']+'/read'
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            read=list(pool.map(lambda _:peer.post(read_url),range(3)))
+        assert all(r.status_code==200 for r in read) and len({r.json()['read_at'] for r in read})==1
+        client.patch('/api/v1/templates/'+first+'/visibility',json=dict(shared=False,revision=3)).raise_for_status()
+        assert peer.post(read_url).status_code==404
+    print('Template publication PostgreSQL PASS: parallel authors, one publication and receipt per reader, concurrent read state and withdrawn access.')
+
+
 def main():
     original=get_settings()
     operator=make_engine(original)
@@ -407,6 +447,7 @@ def main():
                 print('Valuation PostgreSQL PASS: idempotent receipts, review fencing, stale source rejection and historical replay.')
                 print('Calculation PostgreSQL PASS: idempotency, replay, review fencing and stale input rejection.')
                 print('Template PostgreSQL PASS: idempotent upload and unique concurrent version numbers.')
+                check_template_publications(app,client,password)
                 print('PostgreSQL integration PASS: migrations, concurrent upload/fact/review/snapshot/AI deduplication, single GPU task, single successor, crash recovery and stale-worker fencing.')
                 check_pdf_resume(app,client)
     finally:

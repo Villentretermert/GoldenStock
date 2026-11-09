@@ -28,12 +28,16 @@ def mount_templates_ui(app):
         body=f'<h1>{e(data["title"])}</h1><p>{"Shared structure" if data["shared"] else "Private template"}</p>'
         body+='<div class="notice">Sharing exposes the title, field keys, units, periods, definitions and formulas to your fund. The structure has blank inputs, no original comments, other text, cached results or document properties. Only the author can download the original. Review mapping text before sharing.</div>'
         if owner:
+            planned=data['publication_preview']
+            if planned:
+                body+='<section class="card"><h2>Publication preview</h2><p>Version '+str(planned['number'])+' · '+('Already published; sharing again sends no duplicate.' if planned['already_published'] else 'One site update for each active fund member, including you, when published.')+'</p><ul>'
+                body+=''.join('<li>'+e(change)+'</li>' for change in planned['changes'])+'</ul><p>Only this version is published. Earlier unpublished drafts stay private. Personal copies and calculations are unchanged.</p></section>'
             body+=form('/api/v1/templates/'+template_id+'/visibility','Make private' if data['shared'] else 'Share clean structure with fund',hidden('shared',str(not data['shared']).lower())+hidden('revision',data['revision']),method='PATCH')
             body+='<h2>New version</h2><p>Saving a version makes this template private again.</p>'+form('/api/v1/templates','Validate new version',upload_fields(template_id),upload=True)
         body+=form('/api/v1/templates/'+template_id+'/copy','Create private structure copy',next='/templates')
         for v in data['versions']:
             link=f'/api/v1/templates/{template_id}/versions/{v["id"]}'
-            body+=f'<article class="card"><h2>Version {v["number"]}</h2><p>Compatible with {e(v["contract"]["policy"])}. Not calculated.</p><a href="{link}/structure">Download clean structure</a>'
+            body+=f'<article class="card" id="version-{e(v["id"])}"><h2>Version {v["number"]}</h2><p>{"Published structure" if v["published"] else "Unpublished draft"} · Compatible with {e(v["contract"]["policy"])}. Not calculated.</p><a href="{link}/structure">Download clean structure</a>'
             if owner: body+=f' · <a href="{link}/original">Download private original</a>'
             body+=f'<p><a class="button" href="/calculations/new?template_id={e(template_id)}&version_id={e(v["id"])}">Calculate this version</a></p>'
             body+='<div class="table-wrap"><table class="template-map"><tr><th>Key</th><th>Role</th><th>Cell</th><th>Unit / period</th><th>Definition</th></tr>'

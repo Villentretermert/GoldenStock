@@ -7,14 +7,15 @@ from pathlib import Path
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel,Field,ConfigDict
-from sqlalchemy import select,update
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from starlette.datastructures import UploadFile
-from goldenstock.auth import authenticate,owned,visible,audit
-from goldenstock.models import ModelTemplate,TemplateVersion,User,new_id
+from goldenstock.auth import authenticate,visible,audit
+from goldenstock.models import ModelTemplate,TemplateVersion,TemplatePublication,User,new_id
 from goldenstock.storage import FileStore
 from goldenstock.template_contract import validate_template,clean_workbook
+from goldenstock.template_publications import version_query,preview,publish
 
 router=APIRouter(prefix='/api/v1/templates')
 
@@ -102,8 +103,11 @@ def detail(template_id:str,request:Request):
     actor=authenticate(request)
     with Session(request.app.state.engine) as db:
         template=access(db,template_id,actor)
-        versions=[version_view(v) for v in db.scalars(select(TemplateVersion).where(TemplateVersion.template_id==template.id).order_by(TemplateVersion.number.desc()))]
-        return dict(view(template),versions=versions)
+        rows=list(db.scalars(version_query(template,actor).order_by(TemplateVersion.number.desc())))
+        published=set(db.scalars(select(TemplatePublication.version_id).where(TemplatePublication.template_id==template.id)))
+        versions=[dict(version_view(v),published=v.id in published) for v in rows]
+        planned=preview(db,template,rows[0]) if rows and template.owner_id==actor.id else None
+        return dict(view(template),versions=versions,publication_preview=planned)
 
 
 @router.get('/{template_id}/versions/{version_id}/{kind}')
@@ -111,7 +115,7 @@ def download(template_id:str,version_id:str,kind:str,request:Request):
     actor=authenticate(request)
     with Session(request.app.state.engine) as db:
         template=access(db,template_id,actor,write=kind=='original')
-        row=db.scalar(select(TemplateVersion).where(TemplateVersion.id==version_id,TemplateVersion.template_id==template.id))
+        row=db.scalar(version_query(template,actor).where(TemplateVersion.id==version_id))
         if not row or kind not in {'original','structure'}: raise HTTPException(404,'Template version not found')
         key=row.blob_key if kind=='original' else row.clean_key
         expected=row.sha256 if kind=='original' else row.clean_sha256
@@ -133,10 +137,16 @@ def visibility(template_id:str,data:Visibility,request:Request):
     with Session(request.app.state.engine) as db,db.begin():
         # Audit inserts reference User too; keep the same order as upload/copy/calculation.
         db.scalar(select(User).where(User.id==actor.id).with_for_update())
-        owned(db,ModelTemplate,template_id,actor,True)
-        changed=db.execute(update(ModelTemplate).where(ModelTemplate.id==template_id,ModelTemplate.revision==data.revision)
-            .values(shared=data.shared,revision=data.revision+1))
-        if not changed.rowcount: raise HTTPException(409,'Template changed; reload before sharing')
+        template=access(db,template_id,actor,True)
+        if template.revision!=data.revision: raise HTTPException(409,'Template changed; reload before sharing')
+        if data.shared:
+            version=db.scalar(version_query(template,actor).order_by(TemplateVersion.number.desc()).limit(1))
+            if not version: raise HTTPException(409,'No version to publish')
+            store=FileStore(request.app.state.settings.data_dir)
+            if not store.path(version.clean_key).is_file() or store.checksum(version.clean_key)!=version.clean_sha256:
+                raise HTTPException(409,'Template integrity check failed')
+            publish(db,template,version,actor)
+        template.shared=data.shared;template.revision+=1
         audit(db,actor,'template.visibility',template_id,str(data.shared))
         return {'ok':True}
 
@@ -148,7 +158,7 @@ def copy(template_id:str,request:Request):
         # Match upload lock order; insertion also checks the owner's foreign key.
         db.scalar(select(User).where(User.id==actor.id).with_for_update())
         source=access(db,template_id,actor)
-        version=db.scalar(select(TemplateVersion).where(TemplateVersion.template_id==source.id).order_by(TemplateVersion.number.desc()).limit(1))
+        version=db.scalar(version_query(source,actor).order_by(TemplateVersion.number.desc()).limit(1))
         if not version: raise HTTPException(409,'No version to copy')
         clone=ModelTemplate(org_id=actor.org_id,owner_id=actor.id,title=('Copy of '+source.title)[:160])
         db.add(clone);db.flush()

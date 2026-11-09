@@ -96,7 +96,8 @@ def create(data:CalculationInput,request:Request):
         company=db.scalar(select(Company).where(Company.id==data.company_id).with_for_update())
         if not company: raise HTTPException(404,'Company not found')
         template=access(db,data.template_id,actor)
-        version=db.scalar(select(TemplateVersion).where(TemplateVersion.id==data.version_id,TemplateVersion.template_id==template.id))
+        from goldenstock.template_publications import version_query
+        version=db.scalar(version_query(template,actor).where(TemplateVersion.id==data.version_id))
         if not version: raise HTTPException(404,'Template version not found')
         contract=json.loads(version.contract)
         inputs={f['key']:f for f in contract['fields'] if f['role']=='input'}

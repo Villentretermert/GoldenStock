@@ -153,7 +153,9 @@ def unread_count(request:Request):
     with Session(request.app.state.engine) as db:
         count=db.scalar(select(func.count()).select_from(SiteNotification).where(SiteNotification.org_id==actor.org_id,
             SiteNotification.owner_id==actor.id,SiteNotification.read_at.is_(None)))
-        return dict(unread_count=count)
+        from goldenstock.template_publications import count as template_count
+        models=template_count(db,actor)
+        return dict(unread_count=count+models,reporting_unread=count,templates_unread=models)
 
 
 @router.post('/notifications/{key}/read')

@@ -4,6 +4,7 @@ from fastapi import Request
 from fastapi.responses import RedirectResponse
 from goldenstock.monitoring import status,notifications
 from goldenstock.monitor_history import values,history
+from goldenstock.template_publications import notifications as template_notifications
 
 LABELS={'new_filing':'New disclosure','amended_filing':'Amended disclosure',
     'filing_metadata_changed':'Disclosure metadata changed','nonreliance_disclosure':'Non-reliance disclosure — review required',
@@ -36,14 +37,32 @@ def mount_monitoring_ui(app):
         if result['significant']: body+=' <span class="tag">Change of at least 5%</span>'
         return body+'</p>'
 
+    def shared_updates(request,offset=0,unread=False):
+        feed=template_notifications(request,offset,unread)
+        body='<h2 id="shared-models">Shared template publications</h2><p>'+str(feed['unread_count'])+' unread shared-template updates. Personal copies and calculations stay unchanged.</p>'
+        body+='<p><a href="/updates?category=models">All shared-template updates</a> · <a href="/updates?category=models&unread=true">Unread shared-template updates</a></p>'
+        for item in feed['items']:
+            d=item['detail'];link='/templates/'+e(item['template_id'])+'#version-'+e(item['version_id'])
+            body+='<article class="card"><span class="tag">'+('Read' if item['read_at'] else 'Unread')+' · Shared structure</span><h3>'+e(d['title'])+' — version '+str(d['number'])+'</h3><p>'+e(stamp(item['created']))+'</p>'
+            body+='<ul>'+''.join('<li>'+e(change)+'</li>' for change in d['changes'])+'</ul><p><a href="'+link+'">Open published version</a></p>'
+            if not item['read_at']: body+=form('/api/v1/template-updates/'+item['id']+'/read','Mark template update as read')
+            body+='</article>'
+        if not feed['items']: body+='<p>No shared-template updates in this view. Unpublished or withdrawn structures are not visible to other analysts.</p>'
+        prefix='/updates?category=models&unread='+str(unread).lower()+'&offset='
+        if offset: body+='<a href="'+prefix+str(max(0,offset-50))+'">Previous template updates</a> '
+        if feed['has_more']: body+='<a href="'+prefix+str(offset+50)+'">Next template updates</a>'
+        return body
+
     @app.get('/updates')
     def updates(request:Request,offset:int=0,unread:bool=False,category:str='all'):
         actor=actor_or_none(request)
         if not actor: return RedirectResponse('/login',status_code=303)
+        if category=='models':
+            return page('Shared template updates','<h1>Shared template updates</h1><p><a href="/updates">Reporting updates</a></p>'+shared_updates(request,offset,unread),actor)
         feed=notifications(request,offset,unread,category);coverage=status(request)
         body=f'<h1>Reporting updates</h1><p>{feed["unread_count"]} unread · Notifications for companies in your watchlist, delivered only on this site.</p>'
         if not coverage['scheduler_ready']: body+='<div class="notice">Monitoring scheduler is not responding. New checks are delayed; saved updates remain available. Start or check the monitor container.</div>'
-        body+='<p><a href="/updates">All updates</a> · <a href="/updates?unread=true">Unread only</a> · <a href="#coverage">Coverage and check status</a></p>'
+        body+='<p><a href="/updates">All updates</a> · <a href="/updates?unread=true">Unread only</a> · <a href="/updates?category=models">Shared template updates</a> · <a href="#coverage">Coverage and check status</a></p>'
         body+='<p><a href="/updates?category=revisions">Revisions to observed periods</a> · <a href="/updates?category=periods">New metrics and periods</a> · <a href="/updates?category=other">Other disclosures and source status</a></p><p>Value changes appear first. Highlighting starts at 5%, calculated against the absolute previous value. Smaller changes remain visible.</p>'
         body+='<div class="notice">New public disclosures require analyst review. Existing facts, calculations and valuations stay unchanged. Changes in XBRL values or amended filings are signals to investigate, not a confirmed accounting restatement.</div>'
         if not feed['items']: body+='<article class="card"><h2>No updates in this view</h2><p>The first successful check records a baseline without sending historical filings. Later changes appear here. Follow companies below and check the source status.</p></article>'
@@ -72,6 +91,7 @@ def mount_monitoring_ui(app):
             body+='</article>'
         if offset>0: body+=f'<a href="/updates?offset={max(0,offset-50)}&unread={str(unread).lower()}&category={e(category)}">Previous</a> '
         if feed['has_more']: body+=f'<a href="/updates?offset={offset+50}&unread={str(unread).lower()}&category={e(category)}">Next</a>'
+        if category=='all': body+=shared_updates(request,unread=unread)
         body+='<h2 id="coverage">Coverage and check status</h2><p>Checks run about every six hours while this computer and worker are running. One shared check serves all followers. Manual requests have a 15-minute cooldown.</p><div class="grid">'
         for c in coverage['companies']:
             body+=f'<article class="card"><h3>{e(c["name"])}</h3><p>{"Following via watchlist" if c["following"] else "Not in your watchlist"}</p>'

@@ -50,6 +50,10 @@ with TestClient(app) as client:
                            headers={"Idempotency-Key":"gs023-private-template"},
                            files={"file":("reference.xlsx",demo.content)})
     template.raise_for_status()
+    client.patch('/api/v1/templates/'+template.json()['template_id']+'/visibility',json=dict(shared=True,revision=1)).raise_for_status()
+    template_update=client.get('/api/v1/template-updates').json()['items'][0]
+    client.post('/api/v1/template-updates/'+template_update['id']+'/read').raise_for_status()
+    template_update=client.get('/api/v1/template-updates').json()['items'][0]
     knowledge = client.get("/api/v1/knowledge/jpm/export").json()
     assert len(knowledge["facts"]) == 1
     exchange=client.post('/api/v1/lab/exchange/drafts',json=dict(title='Synthetic recovery labels',
@@ -123,7 +127,7 @@ with TestClient(app) as client:
         db.add(ExtractionCheckpoint(version_id=version.id,parser_version=PDF_PARSER_VERSION,
             source_sha256=version.sha256,completed_pages=25,total_pages=26,payload=encoded,
             payload_sha256=hashlib.sha256(encoded.encode()).hexdigest()))
-    print(json.dumps(dict(document=original, template=template.json(), knowledge_hash=knowledge["state_hash"],
+    print(json.dumps(dict(document=original, template=template.json(),template_update=template_update, knowledge_hash=knowledge["state_hash"],
                           pending_document=pending,batch_id=batch_id,batch_manifest=batch_manifest,batch_executions=batch_executions,lab_exchange=lab_exchange,
                           monitor_history_url=monitor_history_url,monitor_history=monitor_history,monitor_update=update,
                           template_sha=hashlib.sha256(demo.content).hexdigest(),

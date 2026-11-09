@@ -430,6 +430,30 @@ class TemplateVersion(Base):
     created: Mapped[float]=mapped_column(Float,default=time.time)
 
 
+class TemplatePublication(Base):
+    __tablename__='template_publications'
+    id: Mapped[str]=mapped_column(String(32),primary_key=True,default=new_id)
+    org_id: Mapped[str]=mapped_column(ForeignKey('organizations.id'),index=True)
+    template_id: Mapped[str]=mapped_column(ForeignKey('model_templates.id'),index=True)
+    version_id: Mapped[str]=mapped_column(ForeignKey('template_versions.id'),unique=True)
+    publisher_id: Mapped[str]=mapped_column(ForeignKey('users.id'))
+    payload: Mapped[str]=mapped_column(Text)
+    payload_sha256: Mapped[str]=mapped_column(String(64))
+    legacy: Mapped[bool]=mapped_column(Boolean,default=False)
+    created: Mapped[float]=mapped_column(Float,default=time.time)
+
+
+class TemplateNotification(Base):
+    __tablename__='template_notifications'
+    __table_args__=(UniqueConstraint('owner_id','publication_id'),)
+    id: Mapped[str]=mapped_column(String(32),primary_key=True,default=new_id)
+    org_id: Mapped[str]=mapped_column(ForeignKey('organizations.id'),index=True)
+    # Recipients are checked at delivery/read. No cross-user FK locks during fanout.
+    owner_id: Mapped[str]=mapped_column(String(32),index=True)
+    publication_id: Mapped[str]=mapped_column(ForeignKey('template_publications.id'))
+    read_at: Mapped[float | None]=mapped_column(Float,nullable=True)
+
+
 class CalculationRun(Base):
     __tablename__='calculation_runs'
     __table_args__=(UniqueConstraint('owner_id','idem_key'),)

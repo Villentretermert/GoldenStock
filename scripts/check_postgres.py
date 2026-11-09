@@ -110,6 +110,30 @@ def check_template_publications(app,client,password):
     print('Template publication PostgreSQL PASS: parallel authors, one publication and receipt per reader, concurrent read state and withdrawn access.')
 
 
+def check_workbook_mapping_concurrency(client):
+    import io
+    from openpyxl import Workbook
+    book=Workbook();book.active['B1']=12
+    stream=io.BytesIO();book.save(stream);book.close();raw=stream.getvalue()
+    def upload():
+        return client.post('/api/v1/workbook-maps',data={'title':'Concurrent map'},headers={'Idempotency-Key':'pg-map-upload'},files={'file':('workbook.xlsx',raw)})
+    with ThreadPoolExecutor(max_workers=3) as pool: responses=list(pool.map(lambda _:upload(),range(3)))
+    assert all(r.status_code==201 for r in responses),[r.text for r in responses]
+    assert len({r.json()['id'] for r in responses})==1
+    base='/api/v1/workbook-maps/'+responses[0].json()['id']
+    mapping=dict(key='profit',sheet='Sheet',cell='B1',unit='USD',scale='millions',period='FY2025',definition='Synthetic consolidated owners profit',mode='input')
+    def edit(): return client.put(base+'/mapping',json=dict(revision=1,mapping=mapping))
+    with ThreadPoolExecutor(max_workers=2) as pool: edits=list(pool.map(lambda _:edit(),range(2)))
+    assert sorted(r.status_code for r in edits)==[200,409]
+    data=client.get(base).json()
+    client.post(base+'/confirm',json=dict(revision=data['revision'],preview_hash=data['preview']['hash'],keys=['profit'],confirmed=True)).raise_for_status()
+    data=client.get(base).json();args=dict(revision=data['revision'],preview_hash=data['preview']['hash'],acknowledge_omitted=True)
+    with ThreadPoolExecutor(max_workers=3) as pool: final=list(pool.map(lambda _:client.post(base+'/finalize',json=args),range(3)))
+    assert all(r.status_code==201 for r in final),[r.text for r in final]
+    assert len({r.json()['id'] for r in final})==1
+    print('Workbook mapping PostgreSQL PASS: concurrent upload deduplication, stale edit rejection and one immutable finalization.')
+
+
 def main():
     original=get_settings()
     operator=make_engine(original)
@@ -448,6 +472,7 @@ def main():
                 print('Calculation PostgreSQL PASS: idempotency, replay, review fencing and stale input rejection.')
                 print('Template PostgreSQL PASS: idempotent upload and unique concurrent version numbers.')
                 check_template_publications(app,client,password)
+                check_workbook_mapping_concurrency(client)
                 print('PostgreSQL integration PASS: migrations, concurrent upload/fact/review/snapshot/AI deduplication, single GPU task, single successor, crash recovery and stale-worker fencing.')
                 check_pdf_resume(app,client)
     finally:

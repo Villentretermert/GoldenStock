@@ -15,6 +15,7 @@ def mount_templates_ui(app):
         actor=actor_or_none(request)
         if not actor: return RedirectResponse('/login',status_code=303)
         body='<h1>Excel templates</h1><p>Versioned structures for private scenario calculations. Uploads are private by default.</p><p><a href="/api/v1/templates/demo">Download synthetic demo XLSX</a></p><div class="notice">Contract v1: Model and GS_Map sheets, up to 100 mapped cells. Arithmetic only; no Excel functions, macros, external links or circular references. Upload limit 50 MB, expanded package limit 5 MB. Validation does not calculate a valuation.</div>'
+        body+='<p><a class="button" href="/workbook-maps">Map an ordinary Excel workbook</a></p>'
         body+=form('/api/v1/templates','Validate and save template',upload_fields(),upload=True)
         for row in listing(request):
             body+=f'<article class="card"><a href="/templates/{e(row["id"])}">{e(row["title"])}</a><p>{"Shared structure" if row["shared"] else "Private"}</p></article>'

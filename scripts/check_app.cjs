@@ -23,6 +23,7 @@ let browser;
  await page.getByLabel('Password',{exact:true}).fill(process.env.GS_QA_PASSWORD);
  await page.getByRole('button',{name:'Sign in',exact:true}).click();
  await page.getByRole('heading',{name:'Your watchlist',exact:true}).waitFor();
+ if(process.env.GS_QA_MAP_WORKBOOK)await require('./check_workbook_maps.cjs')(page,base);
  if(process.env.GS_QA_DEVICE_RUN){
    const key=process.env.GS_QA_DEVICE_RUN;
    await page.goto(base+'/ai-run/'+key);

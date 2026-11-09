@@ -28,6 +28,7 @@ label{display:block;margin:10px 0 16px}label input,label select{display:block;ma
 #message{color:#9b2929;white-space:pre-wrap}.table-wrap{overflow-x:auto}td,th{padding:12px;text-align:left;vertical-align:top;border-bottom:1px solid #d8e0d6}td{max-width:600px;overflow-wrap:anywhere}
 textarea{display:block;width:100%;max-width:100%;font:inherit;padding:10px;border:1px solid #b8c7b9;border-radius:5px}.sensitivity td,.sensitivity th{white-space:nowrap;overflow-wrap:normal}.valuation-price{font-size:32px;margin:12px 0;color:#285641}.template-map{min-width:760px} input.check{width:auto;display:inline}fieldset{border:1px solid #d8e0d6;border-radius:8px;margin:16px 0;padding:16px;min-width:0}
 .valuation-summary h2{margin-top:16px}.valuation-range{font-size:clamp(22px,3vw,32px);color:#285641;margin:12px 0;overflow-wrap:anywhere;font-weight:bold}
+.workbook-map th:first-child{min-width:112px;white-space:nowrap}.workbook-map td:nth-child(2){min-width:160px}.workbook-map td:nth-child(3){min-width:260px}
 @media(max-width:600px){h1{font-size:30px}header{padding:16px 22px;gap:12px}main{padding:22px 16px}.card{padding:18px}nav{gap:12px;font-size:14px}}
 '''
 JS = r'''
@@ -67,7 +68,13 @@ document.querySelectorAll('form[data-api]').forEach(form=>form.addEventListener(
 event.preventDefault();const message=document.getElementById('message');message.textContent='';
 const button=form.querySelector('button:not([type="button"])');if(button)button.disabled=true;
 try{const fields=new FormData(form);let body;const headers={'X-CSRF-Token':document.querySelector('meta[name="csrf"]').content};
-if(form.dataset.valuation){
+if(form.dataset.mapEdit){const v=Object.fromEntries(fields);const revision=Number(v.revision);delete v.revision;
+body=JSON.stringify({revision,mapping:v});headers['Content-Type']='application/json';}
+else if(form.dataset.mapConfirm){const v=Object.fromEntries(fields);
+body=JSON.stringify({revision:Number(v.revision),preview_hash:v.preview_hash,keys:fields.getAll('keys'),confirmed:fields.has('confirmed')});headers['Content-Type']='application/json';}
+else if(form.dataset.mapFinalize){const v=Object.fromEntries(fields);
+body=JSON.stringify({revision:Number(v.revision),preview_hash:v.preview_hash,acknowledge_omitted:fields.has('acknowledge_omitted')});headers['Content-Type']='application/json';}
+else if(form.dataset.valuation){
 const v=Object.fromEntries(fields);const scenarios={};
 for(const name of ['base','optimistic','stress']){if(name!=='base'&&!fields.has('enable.'+name))continue;
 scenarios[name]=Object.create(null);for(const [key,value] of fields){const p=key.split('.');if(p[0]!==name||p.length!==3)continue;
@@ -83,7 +90,7 @@ scenarios[name]=Object.create(null);for(const [key,value] of fields){const parts
 const entry=scenarios[name][parts[1]]||={confirmed:fields.has('confirmed')};
 if(parts[2]==='note'||value.trim())entry[parts[2]]=value.trim();}}
 const checks=[];for(let n=0;n<3;n++){const prefix='check.'+n+'.';if(values[prefix+'key'])checks.push({key:values[prefix+'key'],expected:values[prefix+'expected'],tolerance:values[prefix+'tolerance'],note:values[prefix+'note']});}
-body=JSON.stringify({title:values.title,company_id:values.company_id,template_id:values.template_id,version_id:values.version_id,snapshot_id:values.snapshot_id||null,scenarios,checks});
+body=JSON.stringify({title:values.title,company_id:values.company_id,template_id:values.template_id,version_id:values.version_id,snapshot_id:values.snapshot_id||null,workbook_map_id:values.workbook_map_id||null,scenarios,checks});
 if(form.dataset.payload!==body){form.dataset.requestKey=crypto.randomUUID();form.dataset.payload=body;}
 headers['Idempotency-Key']=form.dataset.requestKey;headers['Content-Type']='application/json';}
 else if(form.dataset.labDraft){const v=Object.fromEntries(fields);
@@ -99,6 +106,7 @@ if('source_start' in values)values.source_start=Number(values.source_start);
 if('revision' in values)values.revision=Number(values.revision);body=JSON.stringify(values);headers['Content-Type']='application/json';}
 const response=await fetch(form.dataset.api,{method:form.dataset.method||'POST',headers,body});const result=await response.json();
 if(!response.ok)throw new Error(typeof result.detail==='string'?result.detail:'Please check the entered values');
+if(form.dataset.mapUpload){location.href='/workbook-maps/'+result.id;return;}
 location.href=form.dataset.labDraft||form.dataset.labExchange?'/lab/workbooks/'+result.id:form.dataset.labImport?'/lab/workbook-imports/'+result.id:form.dataset.labConfirm?'/lab/datasets/'+result.id:form.dataset.aiBatch?'/ai-batch/'+result.id:form.dataset.aiProposal?'/ai-run/'+result.id:form.dataset.labDataset?'/lab/datasets/'+result.id:form.dataset.labExperiment?'/lab/experiments/'+result.id:form.dataset.valuation?'/valuations/'+result.id:form.dataset.calculation?'/calculations/'+result.id:(form.dataset.next||location.pathname+location.search);
 }catch(error){message.textContent=error.message;message.scrollIntoView({block:'center'});}finally{if(button)button.disabled=false;}
 }));
@@ -140,6 +148,8 @@ def company_card(c):
 
 
 def mount_ui(app):
+    from goldenstock.workbook_maps_ui import mount_workbook_maps_ui
+    mount_workbook_maps_ui(app)
     from goldenstock.lab_exchange_ui import mount_exchange_ui
     mount_exchange_ui(app)
     from goldenstock.monitoring_ui import mount_monitoring_ui

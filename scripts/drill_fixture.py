@@ -55,6 +55,20 @@ with TestClient(app) as client:
     client.post('/api/v1/template-updates/'+template_update['id']+'/read').raise_for_status()
     template_update=client.get('/api/v1/template-updates').json()['items'][0]
     knowledge = client.get("/api/v1/knowledge/jpm/export").json()
+    # The wizard's private original and immutable approval map must survive restore.
+    import io
+    from openpyxl import Workbook
+    mapped_book=Workbook();mapped_book.active['A1']='Synthetic owners profit / USD millions';mapped_book.active['B2']=12
+    mapped_stream=io.BytesIO();mapped_book.save(mapped_stream);mapped_book.close()
+    mapped=client.post('/api/v1/workbook-maps',data={'title':'Recovery workbook map'},
+        headers={'Idempotency-Key':'gs036-recovery-map'},files={'file':('mapped.xlsx',mapped_stream.getvalue())})
+    mapped.raise_for_status();mapped_url='/api/v1/workbook-maps/'+mapped.json()['id']
+    client.put(mapped_url+'/mapping',json=dict(revision=1,mapping=dict(key='profit',sheet='Sheet',cell='B2',mode='input',unit='USD',scale='millions',period='FY2025',definition='Synthetic owners profit'))).raise_for_status()
+    mapped_preview=client.get(mapped_url).json()
+    client.post(mapped_url+'/confirm',json=dict(revision=mapped_preview['revision'],preview_hash=mapped_preview['preview']['hash'],keys=['profit'],confirmed=True)).raise_for_status()
+    mapped_preview=client.get(mapped_url).json()
+    client.post(mapped_url+'/finalize',json=dict(revision=mapped_preview['revision'],preview_hash=mapped_preview['preview']['hash'],acknowledge_omitted=True)).raise_for_status()
+    mapped_receipt=client.get(mapped_url).json()
     assert len(knowledge["facts"]) == 1
     exchange=client.post('/api/v1/lab/exchange/drafts',json=dict(title='Synthetic recovery labels',
         kind='proposals',split='development',cases=[dict(job_id=original['job_id'],expected=[])]))
@@ -128,6 +142,7 @@ with TestClient(app) as client:
             source_sha256=version.sha256,completed_pages=25,total_pages=26,payload=encoded,
             payload_sha256=hashlib.sha256(encoded.encode()).hexdigest()))
     print(json.dumps(dict(document=original, template=template.json(),template_update=template_update, knowledge_hash=knowledge["state_hash"],
+                          workbook_map=mapped_receipt,workbook_sha=hashlib.sha256(mapped_stream.getvalue()).hexdigest(),
                           pending_document=pending,batch_id=batch_id,batch_manifest=batch_manifest,batch_executions=batch_executions,lab_exchange=lab_exchange,
                           monitor_history_url=monitor_history_url,monitor_history=monitor_history,monitor_update=update,
                           template_sha=hashlib.sha256(demo.content).hexdigest(),

@@ -430,6 +430,25 @@ class TemplateVersion(Base):
     created: Mapped[float]=mapped_column(Float,default=time.time)
 
 
+class WorkbookMapping(Base):
+    __tablename__='workbook_mappings'
+    __table_args__=(UniqueConstraint('owner_id','idem_key'),)
+    id: Mapped[str]=mapped_column(String(32),primary_key=True,default=new_id)
+    org_id: Mapped[str]=mapped_column(ForeignKey('organizations.id'),index=True)
+    owner_id: Mapped[str]=mapped_column(ForeignKey('users.id'),index=True)
+    parent_id: Mapped[str | None]=mapped_column(ForeignKey('workbook_mappings.id'),nullable=True)
+    version_id: Mapped[str | None]=mapped_column(ForeignKey('template_versions.id'),nullable=True,unique=True)
+    title: Mapped[str]=mapped_column(String(160))
+    idem_key: Mapped[str]=mapped_column(String(100))
+    request_hash: Mapped[str]=mapped_column(String(64))
+    blob_key: Mapped[str]=mapped_column(String(200))
+    sha256: Mapped[str]=mapped_column(String(64))
+    inspection: Mapped[str]=mapped_column(Text)
+    entries: Mapped[str]=mapped_column(Text,default='[]')
+    revision: Mapped[int]=mapped_column(Integer,default=1)
+    created: Mapped[float]=mapped_column(Float,default=time.time)
+
+
 class TemplatePublication(Base):
     __tablename__='template_publications'
     id: Mapped[str]=mapped_column(String(32),primary_key=True,default=new_id)

@@ -20,12 +20,17 @@ def mount_calculations_ui(app):
         return page('Calculations',body,actor)
 
     @app.get('/calculations/new')
-    def new(request:Request,template_id:str,version_id:str,company_id:str='jpm',snapshot_id:str=''):
+    def new(request:Request,template_id:str,version_id:str,company_id:str='jpm',snapshot_id:str='',workbook_map:str=''):
         actor=actor_or_none(request)
         if not actor: return RedirectResponse('/login',status_code=303)
         template=template_detail(template_id,request)
         version=next((v for v in template['versions'] if v['id']==version_id),None)
         if not version: raise HTTPException(404,'Template version not found')
+        mapped=None
+        if workbook_map:
+            from goldenstock.workbook_maps import detail as map_detail
+            mapped=map_detail(workbook_map,request)
+            if mapped['version_id']!=version_id: raise HTTPException(422,'Workbook map belongs to another version')
         issuers=companies(request)
         if company_id not in {c['id'] for c in issuers}: raise HTTPException(404,'Company not found')
         sets=[s for s in snapshots(request,company_id) if s['current']]
@@ -33,14 +38,15 @@ def mount_calculations_ui(app):
         evidence=input_snapshot(snapshot_id,request)['snapshot']['facts'] if snapshot_id else []
         fields=version['contract']['fields'];inputs=[f for f in fields if f['role']=='input']
         body=f'<h1>Calculate scenarios</h1><p>{e(template["title"])} · Version {version["number"]}</p>'
-        body+='<div class="notice">All inputs are explicit. Original workbook values are never imported automatically. Manual inputs are assumptions, even when they describe a historical year. A completed calculation is not an approved valuation.</div>'
-        body+='<form method="get">'+hidden('template_id',template_id)+hidden('version_id',version_id)+'<label>Company<select name="company_id">'
+        body+='<div class="notice">All inputs require confirmation. When you explicitly open a workbook map, its normalized numbers prefill Base for review. These remain manual assumptions, even for historical years. A completed calculation is not an approved valuation.</div>'
+        if mapped: body+='<p>Input preview from your <a href="/workbook-maps/'+e(workbook_map)+'">private workbook map</a>. Check every value before calculating.</p>'
+        body+='<form method="get">'+hidden('workbook_map',workbook_map)+hidden('template_id',template_id)+hidden('version_id',version_id)+'<label>Company<select name="company_id">'
         body+=''.join(f'<option value="{e(c["id"])}" {"selected" if c["id"]==company_id else ""}>{e(c["name"])}</option>' for c in issuers)
         body+='</select></label><label>Verified input set<select name="snapshot_id"><option value="">Manual assumptions only</option>'
         for snap in sets:
             body+=f'<option value="{e(snap["id"])}" {"selected" if snap["id"]==snapshot_id else ""}>{e(snap["title"])}</option>'
         body+='</select></label><button>Load company and input set</button></form><p>When changing company, load it first to see its input sets.</p><hr>'
-        body+='<form data-calculation="true" data-api="/api/v1/calculations">'+hidden('template_id',template_id)+hidden('version_id',version_id)+hidden('company_id',company_id)+hidden('snapshot_id',snapshot_id)
+        body+='<form data-calculation="true" data-api="/api/v1/calculations">'+hidden('workbook_map_id',workbook_map)+hidden('template_id',template_id)+hidden('version_id',version_id)+hidden('company_id',company_id)+hidden('snapshot_id',snapshot_id)
         body+='<label>Calculation title<input name="title" required maxlength="160"></label>'
         body+='<p><a href="/review/'+e(company_id)+'">Review facts and input sets</a>. Choose a compatible verified fact or enter a manual number. Confirm that its definition and perimeter match the field. Ratios use fractions: 0.05 means 5%. Money uses currency units, without a thousands/millions scale.</p>'
         for scenario in ('base','optimistic','stress'):
@@ -49,14 +55,16 @@ def mount_calculations_ui(app):
             for f in inputs:
                 prefix=f'{scenario}.{f["key"]}'
                 body+=f'<fieldset><legend>{e(f["key"])} · {e(f["unit"])} / {e(f["period"])}</legend><p>{e(f["definition"])}</p><div class="grid">'
-                body+=f'<label>Manual value<input name="{e(prefix)}.value" inputmode="decimal" maxlength="80" placeholder="Decimal number"></label>'
+                suggested=mapped['preview']['inputs'].get(f['key'],'') if mapped and scenario=='base' else ''
+                body+=f'<label>Manual value<input name="{e(prefix)}.value" inputmode="decimal" maxlength="80" placeholder="Decimal number" value="{e(suggested)}"></label>'
                 body+=f'<label>Or verified fact<select name="{e(prefix)}.fact_id"><option value="">Use manual value</option>'
                 for fact in evidence:
                     if fact_matches(f,fact):
                         label=f'{fact["definition"]} | {fact["value"]} {fact["currency"] or fact["canonical_unit"]} | {fact["period_end"]} | {fact["scope_detail"]}'
                         body+=f'<option value="{e(fact["id"])}">{e(label)}</option>'
                 body+='</select></label></div>'
-                body+=f'<label>Reason / definition and perimeter check<input name="{e(prefix)}.note" maxlength="1000"></label></fieldset>'
+                note='Workbook mapping; unverified source number. Confirm definition and perimeter.' if suggested else ''
+                body+=f'<label>Reason / definition and perimeter check<input name="{e(prefix)}.note" maxlength="1000" value="{e(note)}"></label></fieldset>'
             body+='</section>'
         body+='<section class="card"><h2>Control checks</h2><p>Optional: compare a calculated field with an expected value. For a balance, map its residual as a formula and check it against zero. Tolerance uses the field’s unit, without display rounding.</p>'
         for n in range(3):

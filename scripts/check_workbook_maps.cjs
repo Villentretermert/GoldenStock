@@ -1,0 +1,57 @@
+// Exercise the visible wizard and its calculation handoff using synthetic data only.
+module.exports=async function(page,base){
+ const assert=require('node:assert/strict');
+ await page.goto(base+'/templates');
+ await page.getByRole('link',{name:'Map an ordinary Excel workbook',exact:true}).click();
+ await page.getByLabel('Workbook title',{exact:true}).fill('Synthetic bank workbook');
+ await page.getByLabel('Private XLSX workbook',{exact:true}).setInputFiles({name:'synthetic-bank.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from(process.env.GS_QA_MAP_WORKBOOK,'base64')});
+ await page.getByRole('button',{name:'Inspect workbook',exact:true}).click();
+ await page.getByRole('heading',{name:'Synthetic bank workbook',exact:true}).waitFor();
+ const mapUrl=page.url(),ident=new URL(mapUrl).pathname.split('/').pop();
+ const metrics=['profit','equity','assets','roe','roa','nim','cost_income','npl','cost_risk'];
+ async function save(key,cell,sheet,mode,unit,scale,definition){
+  await page.getByLabel('Metric key',{exact:true}).fill(key);
+  await page.getByLabel('Source sheet').selectOption(sheet);
+  await page.getByLabel('Source cell',{exact:true}).fill(cell);
+  await page.getByLabel('Cell treatment').selectOption(mode);
+  await page.getByLabel('Normalized unit').selectOption(unit);
+  await page.getByLabel('Raw number scale').selectOption(scale);
+  await page.getByLabel('Period (FYyyyy or assumption)',{exact:true}).fill('FY2025');
+  await page.getByLabel('Definition / perimeter',{exact:true}).fill(definition);
+  const pending=page.waitForResponse(r=>r.url().endsWith('/mapping')&&r.request().method()==='PUT');
+  const navigation=page.waitForEvent('framenavigated',frame=>frame===page.mainFrame());
+  await page.getByRole('button',{name:'Save mapping and preview',exact:true}).click();
+  assert((await pending).ok());await navigation;await page.waitForLoadState('networkidle');
+ }
+ for(let i=0;i<metrics.length;i++)await save(metrics[i],'B'+(i+2),'Financial data','input',i<3?'USD':'ratio',i<3?'millions':'percent','Synthetic '+metrics[i]+'; consolidated group, FY2025');
+ await save('closing_return','D20','Ratios','formula','ratio','units','Synthetic profit divided by closing total equity');
+ await page.getByRole('heading',{name:'Mapping review',exact:true}).scrollIntoViewIfNeeded();
+ await page.screenshot({path:'design/previews/workbook-map-desktop.png'});
+ await page.setViewportSize({width:390,height:900});
+ await page.screenshot({path:'design/previews/workbook-map-mobile.png'});
+ assert(!await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth));
+ await page.setViewportSize({width:1440,height:1000});
+ for(const key of [...metrics,'closing_return'])await page.getByRole('checkbox',{name:'Confirm '+key,exact:true}).check();
+ await page.getByLabel('I checked the selected cells, units, scale, period, definitions and formula decisions.',{exact:true}).check();
+ await page.getByRole('button',{name:'Confirm selected mappings',exact:true}).click();
+ await page.getByRole('heading',{name:'Save immutable template',exact:true}).waitFor();
+ await page.getByLabel('I accept the complete map, manual decisions, removed mappings and exclusion of all unselected cells/formulas.',{exact:true}).check();
+ await page.getByRole('button',{name:'Finalize private template',exact:true}).click();
+ await page.getByRole('link',{name:'Review workbook inputs and calculate',exact:true}).click();
+ await page.getByRole('heading',{name:'Calculate scenarios',exact:true}).waitFor();
+ assert.equal(await page.locator('[name="base.profit.value"]').inputValue(),'120000000');
+ assert.equal(await page.locator('[name="base.nim.value"]').inputValue(),'0.025');
+ assert(!await page.locator('[name="confirmed"]').isChecked());
+ await page.getByLabel('Calculation title',{exact:true}).fill('Synthetic mapped workbook calculation');
+ await page.locator('[name="confirmed"]').check();
+ await page.getByRole('button',{name:'Calculate and save private scenarios',exact:true}).click();
+ await page.getByRole('heading',{name:'Synthetic mapped workbook calculation',exact:true}).waitFor();
+ const run=new URL(page.url()).pathname.split('/').pop();
+ const receipt=await(await page.request.get(base+'/api/v1/calculations/'+run)).json();
+ assert.equal(receipt.input.workbook_source.id,ident);
+ assert.equal(receipt.result.scenarios.base.values.closing_return.value,'0.2');
+ await page.getByRole('button',{name:'Verify reproducibility',exact:true}).click();
+ await page.getByText('Replay matched the saved result hash.',{exact:true}).waitFor();
+ console.log('Workbook wizard UI PASS: nine bank metrics, custom cross-sheet formula, scale preview, explicit confirmations, private template, input review, Decimal result/replay, desktop/mobile.');
+ await page.goto(base+'/');
+};

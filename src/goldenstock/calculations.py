@@ -53,6 +53,7 @@ class CalculationInput(StrictModel):
     template_id: str=Field(min_length=1,max_length=32)
     version_id: str=Field(min_length=1,max_length=32)
     snapshot_id: str | None=Field(default=None,min_length=1,max_length=32)
+    workbook_map_id: str | None=Field(default=None,min_length=1,max_length=32)
     scenarios: dict[Literal['base','optimistic','stress'],dict[str,InputValue]]=Field(min_length=1,max_length=3)
     checks: list[ControlCheck]=Field(default_factory=list,max_length=20)
 
@@ -85,7 +86,7 @@ def create(data:CalculationInput,request:Request):
     if not re.fullmatch(r'[A-Za-z0-9_-]{8,100}',idem): raise HTTPException(422,'Valid Idempotency-Key required')
     if not data.title.strip(): raise HTTPException(422,'Title is required')
     if 'base' not in data.scenarios: raise HTTPException(422,'Base scenario is required')
-    request_hash=checksum(data.model_dump(mode='json'))
+    request_hash=checksum(data.model_dump(mode='json',exclude={'workbook_map_id'} if data.workbook_map_id is None else set()))
     with Session(request.app.state.engine) as db,db.begin():
         # Consistent lock order with template uploads/copies; Company also fences review changes.
         db.scalar(select(User).where(User.id==actor.id).with_for_update())
@@ -100,6 +101,14 @@ def create(data:CalculationInput,request:Request):
         version=db.scalar(version_query(template,actor).where(TemplateVersion.id==data.version_id))
         if not version: raise HTTPException(404,'Template version not found')
         contract=json.loads(version.contract)
+        workbook_source=None
+        if data.workbook_map_id:
+            from goldenstock.workbook_maps import private as private_map, checked_store, review as map_review
+            mapped=private_map(db,actor,data.workbook_map_id);checked_store(mapped,request)
+            if mapped.version_id!=version.id: raise HTTPException(422,'Workbook map does not belong to this template version')
+            mapped_preview=map_review(db,mapped)
+            workbook_source=dict(id=mapped.id,sha256=mapped.sha256,preview_hash=mapped_preview['hash'],
+                entries=json.loads(mapped.entries),original_inputs=mapped_preview['inputs'])
         inputs={f['key']:f for f in contract['fields'] if f['role']=='input'}
         computed={f['key'] for f in contract['fields'] if f['role']!='input'}
         if any(c.key not in computed for c in data.checks) or len({c.key for c in data.checks})!=len(data.checks):
@@ -133,6 +142,7 @@ def create(data:CalculationInput,request:Request):
             version_id=version.id,number=version.number,clean_sha256=version.clean_sha256,contract=contract),
             snapshot=dict(id=snapshot.id,state_hash=snapshot.state_hash) if snapshot else None,
             scenarios=resolved,checks=checks)
+        if workbook_source is not None: payload['workbook_source']=workbook_source
         try: result=calculate(contract,resolved,checks)
         except ValueError as exc: raise HTTPException(422,'Template calculation contract: '+str(exc)) from None
         row=CalculationRun(org_id=actor.org_id,owner_id=actor.id,company_id=company.id,

@@ -69,6 +69,10 @@ try:
     private_update=sessions[1][0].get('/api/v1/template-updates').json()['items'][0]
     sessions[1][0].post('/api/v1/template-updates/'+private_update['id']+'/read').raise_for_status()
     knowledge = admin.get("/api/v1/knowledge/jpm/export").json()
+    mapped=receipt['workbook_map'];mapped_url='/api/v1/workbook-maps/'+mapped['id']
+    assert admin.get(mapped_url).json()==mapped
+    assert hashlib.sha256(admin.get(mapped_url+'/original').content).hexdigest()==receipt['workbook_sha']
+    assert sessions[1][0].get(mapped_url).status_code==404 and sessions[1][0].get(mapped_url+'/original').status_code==404
     assert len(knowledge["facts"]) == 1 and knowledge["state_hash"] == receipt["knowledge_hash"]
     labels=receipt['lab_exchange'];import_url='/api/v1/lab/exchange/imports/'+labels['import_id']
     restored_labels=admin.get(import_url).json()
@@ -144,7 +148,7 @@ try:
     timings = sorted(item[1] for item in sessions)
     print(json.dumps(dict(concurrent_accounts=len(sessions), scenario="HTTPS login, session and catalog",
                           p50_ms=round(timings[7]), p95_ms=round(timings[math.ceil(.95*15)-1]),
-                          original=True, template=True, template_publications_restored=True, reviewed_knowledge=True, lab_exchange_restored=True, sec_history_restored=True, ai_batch_restored=True, ai_execution_history_restored=True, explicit_cpu=True, pdf_checkpoint_resumed=True, revoked_session_denied=True,
+                          original=True, template=True, workbook_map_restored=True, template_publications_restored=True, reviewed_knowledge=True, lab_exchange_restored=True, sec_history_restored=True, ai_batch_restored=True, ai_execution_history_restored=True, explicit_cpu=True, pdf_checkpoint_resumed=True, revoked_session_denied=True,
                           old_session_denied=True, inference_outage_isolated=True)))
 finally:
     for session, _ in sessions:

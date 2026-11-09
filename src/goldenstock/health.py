@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from goldenstock.config import Settings
 from goldenstock.models import WorkerHeartbeat
 
-SCHEMA_REVISION = "0021"
+SCHEMA_REVISION = "0022"
 
 
 def database_status(engine, settings: Settings) -> tuple[str, str]:

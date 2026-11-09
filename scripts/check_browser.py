@@ -52,6 +52,9 @@ def main():
                 input=json.dumps(dict(login=login,password=password)),text=True,check=True,capture_output=True)
             env['GS_QA_DEVICE_RUN']=json.loads(fixture.stdout)['run_id']
         from extraction_fixtures import simple_pdf
+        if os.environ.get('GS_QA_WORKBOOK_MAPS')=='1':
+            from workbook_fixture import synthetic_workbook
+            env['GS_QA_MAP_WORKBOOK']=base64.b64encode(synthetic_workbook()).decode('ascii')
         env['GS_QA_PDF']=base64.b64encode(simple_pdf()).decode('ascii')
         if os.environ.get('GS_QA_SECTIONS')=='1':
             from extraction_fixtures import section_ai_pdf

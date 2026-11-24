@@ -1,6 +1,6 @@
 {
   "policy": "gs024-v2",
-  "candidate_commit": "aad74d718d5ec4d24fd17b2b854c5fdd23b11303",
+  "candidate_commit": "0a389bb9e30f091443a422ab2afcffdf75d96720",
   "as_of": "2026-11-24",
   "open_critical_defects": 0,
   "gates": [
@@ -10,9 +10,9 @@
       "method": "automated",
       "data_kind": "synthetic",
       "reviewer": "GitHub Actions",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/45402651108",
-      "candidate_commit": "aad74d718d5ec4d24fd17b2b854c5fdd23b11303",
-      "note": "Published candidate Linux CI: 479 passed, 1 skipped, one Starlette TestClient deprecation warning. Separate Docker OCR, PostgreSQL concurrency and isolation passed. Complete source-number binding rejects cut quotes, lost signs/parentheses/percent and cross-fragment borrowing. Validation version fences frozen batches/lab experiments; new single requests do not reuse legacy successes. Local targeted runs: 89 tests, then 10 queue/window tests after cache change. No real quality acceptance is implied."
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/45416508431",
+      "candidate_commit": "0a389bb9e30f091443a422ab2afcffdf75d96720",
+      "note": "Published candidate Linux CI: 499 passed, 1 skipped, one Starlette TestClient deprecation warning. Separate Docker OCR, PostgreSQL concurrency and isolation passed. Context prompt/schema and source checks reject invented, uncited or conflicting fields, preserve singular/plural source scale spelling and fence frozen context batches. Local integration: 132 tests, then 25 targeted after singular-scale support. Qwen3 4B synthetic probes: four expected answers and two protective rejections, not six correct gold labels. Chrome section flow and 15 baseline scenarios passed; explicit USD/million/2025 and context citation observed. No real quality acceptance is implied."
     },
     {
       "id": "five_company_journey",
@@ -20,8 +20,8 @@
       "method": "automated",
       "data_kind": "synthetic",
       "reviewer": "GitHub Actions",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/45402651108",
-      "candidate_commit": "aad74d718d5ec4d24fd17b2b854c5fdd23b11303",
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/45416508431",
+      "candidate_commit": "0a389bb9e30f091443a422ab2afcffdf75d96720",
       "note": "Candidate CI passed the existing five synthetic PDF journeys through parser, review, snapshot, calculation, valuation and three exports. Actual JPMorgan/HSBC/Nu methodology and Office acceptance remain pending."
     },
     {
@@ -30,8 +30,8 @@
       "method": "automated",
       "data_kind": "synthetic",
       "reviewer": "GitHub Actions",
-      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/45402651108",
-      "candidate_commit": "aad74d718d5ec4d24fd17b2b854c5fdd23b11303",
+      "reference": "https://github.com/Villentretermert/GoldenStock/actions/runs/45416508431",
+      "candidate_commit": "0a389bb9e30f091443a422ab2afcffdf75d96720",
       "note": "Candidate CI restored schema 0022, 41 tables and six files in a clean Docker project. Fifteen HTTPS sessions, original PDF, template, workbook map, publications, SEC history, reviewed synthetic knowledge, lab exchange, AI batch/attempts and PDF resume passed. Damaged-source backup and nonempty restore destination were rejected. This is not external-medium or field acceptance."
     },
     {
@@ -47,7 +47,7 @@
     {
       "id": "ai_quality",
       "status": "pending",
-      "note": "At corpus freeze, zero of 500 expected human labels are approved. Six private candidate documents need at least 100 reviewed holdout facts after exposure checks. GS-030 synthetic Qwen diagnostic delivered separate context but left currency, scale and period null; this remains a quality gap, not a passed gold case. Under GS-031 execution settings nearby context citations may also be empty; technical UI checks do not count as quality acceptance. GS-004 whole-number validation is a deterministic source check, not a gold measurement. Synthetic Qwen probe preserved 1,200, (120) and 12.5% while currency/scale/period/perimeter remained null and context_ids empty; the context gap remains open."
+      "note": "At corpus freeze, zero of 500 expected human labels are approved. Six private candidate documents need at least 100 reviewed holdout facts after exposure checks. Historical GS-030 diagnostics left currency/scale/period and sometimes context citations empty. GS-004 context v3-schema now fills the explicit synthetic header, preserves missing fields and primary context; ambiguous headers/years are rejected. These prompts were developed on the synthetic probes and are not independent quality measurements. Semantic applicability, comparative columns and actual accuracy/precision/coverage >=95% remain pending. Whole-number and cited-context validation do not approve facts."
     },
     {
       "id": "remote_access",

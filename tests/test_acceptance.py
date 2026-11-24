@@ -2,6 +2,7 @@
 import copy
 import pytest
 from evaluation.acceptance import assess, GATES, POLICY
+from test_update_benchmark import completed_record
 
 
 def complete_record():
@@ -13,7 +14,8 @@ def complete_record():
     next(row for row in rows if row['id'] == 'ai_quality')['metrics'] = dict(
         expected=100, correct=95, answered=100, emitted=100, documents=6,
         blind_holdout=True, protocol_approved=True, human_reviewed=True)
-    return dict(policy=POLICY, candidate_commit=commit, as_of='2026-11-03',
+    next(row for row in rows if row['id'] == 'daily_workload')['update_benchmark'] = completed_record()
+    return dict(policy=POLICY, candidate_commit=commit, as_of='2026-11-24',
                 open_critical_defects=0, gates=rows)
 
 
@@ -57,4 +59,29 @@ def test_insufficient_real_quality_is_no_go(field, value):
 def test_impossible_quality_counts_rejected(field, value):
     record = complete_record()
     next(row for row in record['gates'] if row['id'] == 'ai_quality')['metrics'][field] = value
+    with pytest.raises(ValueError): assess(record)
+
+
+def test_daily_workload_requires_actual_update_evidence():
+    record = complete_record()
+    row = next(row for row in record['gates'] if row['id'] == 'daily_workload')
+    row.pop('update_benchmark')
+    with pytest.raises(ValueError): assess(record)
+    row['update_benchmark'] = completed_record(601)
+    result = assess(record)
+    assert result['blockers'] == ['daily_workload']
+    assert result['update_measurement']['elapsed_seconds'] == '601'
+    row['update_benchmark']['candidate_commit'] = 'b' * 40
+    with pytest.raises(ValueError): assess(record)
+
+
+def test_legacy_policy_is_not_silently_accepted():
+    record = complete_record()
+    record['policy'] = 'gs024-v1'
+    with pytest.raises(ValueError): assess(record)
+
+
+def test_future_measurement_cannot_sign_an_older_release_record():
+    record = complete_record()
+    record['as_of'] = '2026-11-23'
     with pytest.raises(ValueError): assess(record)

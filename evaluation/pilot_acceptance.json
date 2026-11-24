@@ -1,7 +1,7 @@
 {
-  "policy": "gs024-v1",
+  "policy": "gs024-v2",
   "candidate_commit": "c501143fd060a22d5dd6f76fb2b5a5d51d4c4216",
-  "as_of": "2026-11-09",
+  "as_of": "2026-11-24",
   "open_critical_defects": 0,
   "gates": [
     {
@@ -67,7 +67,7 @@
     {
       "id": "daily_workload",
       "status": "pending",
-      "note": "Measure 45 real documents/day, summary latency including queue time and 3 GiB free VRAM. The ten-minute target applies to updating an existing ready model across all nine banking metrics, including manual review and export; initial construction is measured separately. None is a demonstrated workload SLA yet. GS-031 admission and periodic measurements are implemented. The short synthetic GPU test retained at least 6484 MiB free, and CPU placement was verified; this is not acceptance of user workload or an exclusive VRAM reservation."
+      "note": "Measure 45 real documents/day, summary latency including queue time and 3 GiB free VRAM. The ten-minute target applies to updating an existing ready model across all nine banking metrics, including manual review and export; initial construction is measured separately. None is a demonstrated workload SLA yet. GS-031 admission and periodic measurements are implemented. The short synthetic GPU test retained at least 6484 MiB free, and CPU placement was verified; this is not acceptance of user workload or an exclusive VRAM reservation. Policy gs024-v2 requires a complete private nine-metric, three-export update timing record; the new blank draft is not a measurement."
     },
     {
       "id": "fund_signoff",

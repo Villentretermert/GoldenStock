@@ -4,6 +4,7 @@ from datetime import date
 import json
 from pathlib import Path
 import re
+from evaluation.update_benchmark import assess as assess_update, instant
 
 # Human attestations remain necessary. This tool never grants network or app access.
 GATES = {
@@ -19,7 +20,7 @@ GATES = {
     'daily_workload': ('operator', 'real'),
     'fund_signoff': ('owner', 'real'),
 }
-POLICY = 'gs024-v1'
+POLICY = 'gs024-v2'
 
 
 def nonempty(value):
@@ -32,7 +33,7 @@ def assess(record):
         raise ValueError('Unknown acceptance policy')
     if not re.fullmatch('[0-9a-f]{40}', record.get('candidate_commit', '')):
         raise ValueError('A full candidate commit is required')
-    date.fromisoformat(record['as_of'])
+    as_of = date.fromisoformat(record['as_of'])
     rows = record.get('gates')
     if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
         raise ValueError('Expected a list of gate records')
@@ -41,6 +42,7 @@ def assess(record):
         raise ValueError('Every known gate must occur exactly once')
     blockers = []
     quality = None
+    update_measurement = None
     for row in rows:
         key = row['id']
         if row.get('status') not in ('passed', 'pending', 'failed') or not nonempty(row.get('note')):
@@ -55,6 +57,15 @@ def assess(record):
             raise ValueError('Missing evidence reference or reviewer: ' + key)
         if row.get('candidate_commit') != record['candidate_commit']:
             raise ValueError('Evidence belongs to another candidate: ' + key)
+        if key == 'daily_workload':
+            # A narrative signoff cannot substitute for the measured update workflow.
+            update_measurement = assess_update(row.get('update_benchmark'), record['candidate_commit'])
+            if update_measurement['decision'] != 'MEETS-TARGET':
+                blockers.append(key)
+            else:
+                signed_at = instant(row['update_benchmark']['signoff']['checked_at'])
+                if signed_at.date() > as_of:
+                    raise ValueError('Update evidence is newer than the acceptance record')
         if key == 'ai_quality':
             m = row.get('metrics', {})
             if not isinstance(m, dict):
@@ -83,6 +94,7 @@ def assess(record):
         blockers.append('critical_defects')
     return dict(policy=POLICY, candidate_commit=record['candidate_commit'], as_of=record['as_of'],
                 decision='NO-GO' if blockers else 'GO', blockers=blockers, quality=quality,
+                update_measurement=update_measurement,
                 scope='Offline evidence review; operator and fund retain release authority')
 
 

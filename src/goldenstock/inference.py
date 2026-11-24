@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from goldenstock.config import Settings
+from goldenstock.ai_numbers import NUMBER_VALIDATION_VERSION, numeric_tokens, quoted_number_supported
 
 PROMPT_VERSION='metric-proposal-v5'
 SUMMARY_VERSION='summary-v3-extractive'
@@ -97,12 +98,15 @@ def inference_spec(kind, profile):
     contextual=kind=='context_proposals'
     prompt=SUMMARY_SYSTEM if summary else CONTEXT_SYSTEM if contextual else SYSTEM
     schema=Summary if summary else ContextProposals if contextual else Proposals
-    return dict(profile=profile,model=selected.model,model_digest=selected.digest,
+    spec=dict(profile=profile,model=selected.model,model_digest=selected.digest,
         prompt_version=SUMMARY_VERSION if summary else CONTEXT_PROMPT_VERSION if contextual else PROMPT_VERSION,
         prompt_sha256=hashlib.sha256(prompt.encode()).hexdigest(),
         schema_sha256=hashlib.sha256(json.dumps(schema.model_json_schema(),sort_keys=True).encode()).hexdigest(),
         context=4096 if summary else selected.context,output_tokens=1000 if summary else selected.output_tokens,
         seed=42,temperature=0,think=False,keep_alive=0,adapter_version='ollama-gs021-v1')
+    if not summary:
+        spec['number_validation']=NUMBER_VALIDATION_VERSION
+    return spec
 
 
 class OllamaProvider:
@@ -145,7 +149,7 @@ class OllamaProvider:
             raise InferenceError('instruction_like_evidence_manual_review')
         schema=output_type.model_json_schema()
         proposal_schema=schema['$defs']['ContextProposal' if contextual else 'Proposal']['properties']
-        tokens=sorted({m.group() for e in evidence for m in re.finditer(r'(?<![\w.])\(?[+\-−]?\d[\d,]*(?:\.\d+)?%?\)?(?![\w.])',e['text'])})
+        tokens=sorted({token for e in evidence for token in numeric_tokens(e['text'])})
         if not tokens: raise InferenceError('no_numeric_evidence')
         # An enum avoids unsupported regex grammars in the pinned Ollama runtime.
         proposal_schema['number_text']['enum']=tokens
@@ -168,7 +172,8 @@ class OllamaProvider:
             sources={e['id']:e['text'] for e in evidence}
             from goldenstock.normalization import METRICS,number
             for p in parsed.proposals:
-                if p.metric not in METRICS or p.evidence_id not in sources or p.quote not in sources[p.evidence_id] or p.number_text not in p.quote:
+                if (p.metric not in METRICS or p.evidence_id not in sources or
+                        not quoted_number_supported(sources[p.evidence_id],p.quote,p.number_text)):
                     raise InferenceError('unsupported_evidence')
                 if contextual and (len(set(p.context_ids))!=len(p.context_ids) or
                         any(key not in {c['id'] for c in context} for key in p.context_ids)):
@@ -183,7 +188,7 @@ class OllamaProvider:
             prompt_sha256=hashlib.sha256(prompt.encode()).hexdigest(),
             input_sha256=hashlib.sha256(encoded.encode()).hexdigest(),
             seconds=round(time.monotonic()-start,3),tokens=result.get('eval_count'),
-            status='unreviewed',context=selected.context)
+            status='unreviewed',context=selected.context,number_validation=NUMBER_VALIDATION_VERSION)
 
     def summarize(self,evidence,profile='qwen4'):
         if profile not in PROFILES: raise InferenceError('unknown_profile')

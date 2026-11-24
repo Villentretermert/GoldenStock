@@ -43,3 +43,30 @@ def test_failure_and_cancel_fence(workspace):
         def propose(self,*args): raise InferenceError('provider_unavailable')
     process_ai(app.state.engine,app.state.settings,Fail())
     assert a.get('/api/v1/ai/runs/'+key).json()['error']=='provider_unavailable'
+
+
+def test_partial_number_result_is_discarded_by_queue(workspace):
+    import json
+    from sqlalchemy import select,func
+    from sqlalchemy.orm import Session
+    from goldenstock.models import Extraction,Fact
+    from test_inference import provider
+    app,connect=workspace;client=connect();receipt=seed(client,app)
+    with Session(app.state.engine) as db,db.begin():
+        extraction=db.get(Extraction,receipt['version_id'])
+        payload=json.loads(extraction.payload)
+        payload['items'][0]['text']='Profit 120'
+        payload['items'][1]['text']='Comparative 12'
+        extraction.payload=json.dumps(payload)
+    key=client.post('/api/v1/ai/proposals',json=dict(job_id=receipt['job_id'])).json()['id']
+    class MockHTTPProvider:
+        def propose(self,evidence,profile):
+            proposal=dict(evidence_id=evidence[0]['id'],quote='Profit 120',metric='profit',
+                number_text='12',currency=None,scale=None,period=None,perimeter=None,definition=None)
+            return provider(dict(proposals=[proposal])).propose(evidence,profile)
+    assert process_ai(app.state.engine,app.state.settings,MockHTTPProvider())
+    result=client.get('/api/v1/ai/runs/'+key).json()
+    assert result['state']=='failed' and result['error']=='unsupported_evidence'
+    assert result['result']=={}
+    with Session(app.state.engine) as db:
+        assert db.scalar(select(func.count()).select_from(Fact))==0

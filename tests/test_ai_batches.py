@@ -150,3 +150,20 @@ def test_empty_page_gap_and_blank_batch(workspace):
     gap=client.get('/api/v1/ai/batches/preview',params=params|dict(page_start=4,page_end=4)).json()
     assert gap['empty_pages']==[4] and gap['windows']==[]
     assert client.post('/api/v1/ai/batches',json=params|dict(page_start=4,page_end=4,plan_hash=gap['plan_hash'])).status_code==422
+
+
+def test_number_validation_change_preserves_history_but_blocks_old_batch(workspace,monkeypatch):
+    from goldenstock import inference
+    app,connect=workspace;client=connect();_,params,plan=prepared(app,client)
+    key=create(client,params,plan)
+    monkeypatch.setattr(inference,'NUMBER_VALIDATION_VERSION','future-number-policy')
+    class NoCall:
+        def propose(self,*args): raise AssertionError('Changed rules must not run frozen input')
+    assert process_ai(app.state.engine,app.state.settings,NoCall())
+    old=client.get('/api/v1/ai/batches/'+key)
+    assert old.status_code==200
+    run=client.get('/api/v1/ai/runs/'+old.json()['runs'][0]['run_id']).json()
+    assert run['error']=='batch_configuration_changed' and run['result']=={}
+    fresh=client.get('/api/v1/ai/batches/preview',params=params).json()
+    assert fresh['plan_hash']!=plan['plan_hash']
+    assert fresh['spec']['number_validation']=='future-number-policy'

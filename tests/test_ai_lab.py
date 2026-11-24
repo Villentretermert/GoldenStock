@@ -207,6 +207,17 @@ def test_micro_scores_penalize_duplicates_wrong_context_and_failed_cases():
     assert numeric('(12.5%)')==numeric('-12.50%')
 
 
+def test_number_validation_change_invalidates_frozen_experiment(workspace,monkeypatch):
+    from goldenstock import inference
+    app,connect=workspace;client=connect();key=launch(client,create(client,dataset_payload(client,app)))
+    monkeypatch.setattr(inference,'NUMBER_VALIDATION_VERSION','future-number-policy')
+    class NoCall:
+        def propose(self,*args): raise AssertionError('Old experiment must retain its validation contract')
+    finish(app,NoCall())
+    rows=client.get('/api/v1/lab/experiments/'+key).json()['runs']
+    assert all(row['state']=='failed' and row['error']=='experiment_version_changed' and row['output']=={} for row in rows)
+
+
 def test_lab_ui_escapes_labels_and_hides_identity(workspace):
     from goldenstock.ui import mount_ui
     app,connect=workspace;mount_ui(app);a=connect();payload=dataset_payload(a,app)

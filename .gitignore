@@ -12,6 +12,10 @@ node_modules/
 .chart-data*/
 design/previews/
 deliverables/*.pptx
+deliverables/*.pdf
+deliverables/*.mp4
+deliverables/*.vtt
+deliverables/*.html
 data/
 backups/
 *.log

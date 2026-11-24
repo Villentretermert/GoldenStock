@@ -113,6 +113,30 @@ def test_private_section_preview_is_frozen_and_old_batch_contract_survives(works
     assert client.get('/api/v1/ai/batches/preview',params=params|dict(section_id='ctx-missing')).status_code==404
 
 
+@pytest.mark.parametrize('setting', ['CONTEXT_PROMPT_VERSION','CONTEXT_VALIDATION_VERSION'])
+def test_context_contract_change_blocks_frozen_batch_before_provider(workspace,monkeypatch,setting):
+    from goldenstock import inference
+    app,connect=workspace;client=connect();receipt=seed(client,app,'context-drift')
+    with Session(app.state.engine) as db,db.begin():
+        db.get(Extraction,receipt['version_id']).payload=json.dumps(fixture())
+    query=dict(job_id=receipt['job_id'])
+    section=client.get('/api/v1/ai/batches/sections',params=query).json()['sections'][0]
+    params=query|dict(section_id=section['id'],with_context=True)
+    plan=client.get('/api/v1/ai/batches/preview',params=params).json()
+    body=params|dict(page_start=plan['page_start'],page_end=plan['page_end'],plan_hash=plan['plan_hash'])
+    key=client.post('/api/v1/ai/batches',json=body).json()['id']
+    monkeypatch.setattr(inference,setting,'future-context-contract')
+    class NoCall:
+        def propose_context(self,*args): raise AssertionError('Frozen context must not reach the provider')
+    assert process_ai(app.state.engine,app.state.settings,NoCall())
+    old=client.get('/api/v1/ai/batches/'+key).json()
+    run=client.get('/api/v1/ai/runs/'+old['runs'][0]['run_id']).json()
+    assert run['error']=='batch_configuration_changed' and run['result']=={}
+    fresh=client.get('/api/v1/ai/batches/preview',params=params).json()
+    assert fresh['plan_hash']!=plan['plan_hash']
+    assert old['manifest']['spec']==plan['spec']
+
+
 def test_context_citations_and_numbers_are_separate_provider_contracts():
     evidence=[dict(id='v:1',text='Profit 120')]
     context=[dict(id='ctx-a',text='USD million in 2025. Comparative profit 999')]

@@ -20,6 +20,7 @@ METRICS = {
     'ltv': ('LTV', 'money', 'duration', 'Specify cohort, horizon, revenue or contribution basis and discount assumptions. Never infer from missing data.'),
 }
 SCALES = {'units': Decimal(1), 'thousands': Decimal(1000), 'millions': Decimal(1000000), 'billions': Decimal(1000000000)}
+CURRENCIES = ('USD','EUR','GBP','RUB','BRL','HKD','CNY','JPY','CHF','MXN','COP')
 
 
 class FactInput(BaseModel):
@@ -54,7 +55,7 @@ class FactInput(BaseModel):
                 raise ValueError('Ratios require fraction, percent or bps, units scale and no currency')
         elif self.unit!=kind:
             raise ValueError('Unit does not match metric')
-        if kind=='money' and self.currency not in {'USD','RUB','GBP','EUR','BRL','HKD','CNY','JPY','CHF','MXN','COP'}:
+        if kind=='money' and self.currency not in CURRENCIES:
             raise ValueError('Select a supported explicit currency; no FX conversion')
         if kind=='count' and self.currency:
             raise ValueError('Counts have no currency')

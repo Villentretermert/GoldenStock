@@ -98,12 +98,15 @@ let browser;
    const p=target.result.proposals.find(p=>p.metric==='profit'&&p.number_text==='120');
    if(p.context_ids.some(id=>!target.source_window.context.some(c=>c.id===id)))throw Error('Invalid context citation');
    // Nullable fields are a valid abstention. Record the quality gap separately from UI delivery.
-   if((p.currency!==null&&p.currency!=='USD')||(p.scale!==null&&p.scale!=='millions'))throw Error('Unsupported synthetic context value: '+JSON.stringify(p));
+   // The proposal preserves source spelling; the analyst selects the normalized fact scale.
+   if((p.currency!==null&&p.currency!=='USD')||(p.scale!==null&&!['million','millions'].includes(p.scale)))throw Error('Unsupported synthetic context value: '+JSON.stringify(p));
    console.log('Synthetic context quality probe (not GS-004): '+JSON.stringify({currency:p.currency,scale:p.scale,period:p.period,contextCitations:p.context_ids.length,
-     qualityPassed:p.context_ids.length>0&&p.currency==='USD'&&p.scale==='millions'&&String(p.period).includes('2025')}));
+     qualityPassed:p.context_ids.length>0&&p.currency==='USD'&&['million','millions'].includes(p.scale)&&String(p.period).includes('2025')}));
    await page.goto(base+'/ai-run/'+target.id);
    await page.locator('summary').filter({hasText:'Saved source fragment'}).click();
    await page.screenshot({path:'design/previews/section-context-result.png'});
+   await page.getByRole('heading',{name:'profit: 120',exact:true}).scrollIntoViewIfNeeded();
+   await page.screenshot({path:'design/previews/section-context-filled.png'});
    await page.getByRole('link',{name:/Context source/}).first().click();
    await page.getByRole('heading',{name:'Normalize evidence',exact:true}).waitFor();
    console.log('Report sections UI PASS: sourced title, inferred pages, separate context links, local Qwen on continuation and desktop/mobile.');

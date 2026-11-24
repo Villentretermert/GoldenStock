@@ -12,7 +12,7 @@ from goldenstock.auth import authenticate,audit,Actor
 from goldenstock.models import AIRun,AIExecution,Company,DocumentVersion,Document,Extraction,User
 from goldenstock.ai_resources import DeviceGuard,DeviceUnavailable,PENDING,LEASE_SECONDS,history,choose_device,POLICY
 from goldenstock.documents import authorized_job
-from goldenstock.inference import PROFILES,PROMPT_VERSION,OllamaProvider,InferenceError
+from goldenstock.inference import PROFILES,PROMPT_VERSION,NUMBER_VALIDATION_VERSION,OllamaProvider,InferenceError
 from goldenstock.knowledge import pack,retrieve
 from goldenstock.public_sources import snapshot as public_snapshot,evidence as public_evidence
 from goldenstock.ai_evidence import source_window
@@ -68,6 +68,9 @@ def summaries(data:SummaryRequest,request:Request):
 
 def enqueue(db,actor,company_id,kind,profile,payload):
     if profile not in PROFILES: raise HTTPException(422,'Unknown local profile')
+    if kind=='proposals':
+        # New validation must not reuse a succeeded answer from the old contract.
+        payload=dict(payload,number_validation=NUMBER_VALIDATION_VERSION)
     encoded=json.dumps(payload,sort_keys=True)
     fingerprint=hashlib.sha256((kind+profile+PROFILES[profile].digest+PROMPT_VERSION+'summary-v3-extractive'+encoded).encode()).hexdigest()
     # One shared scheduling lock; SQLite is only a development/test backend.

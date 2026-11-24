@@ -70,3 +70,28 @@ def test_partial_number_result_is_discarded_by_queue(workspace):
     assert result['result']=={}
     with Session(app.state.engine) as db:
         assert db.scalar(select(func.count()).select_from(Fact))==0
+
+
+def test_new_proposal_does_not_reuse_legacy_success(workspace):
+    import hashlib
+    import json
+    from sqlalchemy.orm import Session
+    from goldenstock.models import AIRun
+    from goldenstock.inference import PROFILES,PROMPT_VERSION,NUMBER_VALIDATION_VERSION
+    app,connect=workspace;client=connect();receipt=seed(client,app)
+    request=dict(job_id=receipt['job_id'])
+    old_id=client.post('/api/v1/ai/proposals',json=request).json()['id']
+    with Session(app.state.engine) as db,db.begin():
+        row=db.get(AIRun,old_id);payload=json.loads(row.input)
+        payload.pop('number_validation')
+        row.input=json.dumps(payload,sort_keys=True)
+        row.fingerprint=hashlib.sha256((row.kind+row.profile+PROFILES[row.profile].digest+
+            PROMPT_VERSION+'summary-v3-extractive'+row.input).encode()).hexdigest()
+        row.state='succeeded';row.output=json.dumps(dict(proposals=[],legacy_marker=True))
+    fresh=client.post('/api/v1/ai/proposals',json=request).json()
+    assert fresh['id']!=old_id and fresh['state']=='queued'
+    assert client.post('/api/v1/ai/proposals',json=request).json()['id']==fresh['id']
+    old=client.get('/api/v1/ai/runs/'+old_id).json()
+    assert old['state']=='succeeded' and old['result']['legacy_marker'] is True
+    assert 'number_validation' not in old['source_window']
+    assert client.get('/api/v1/ai/runs/'+fresh['id']).json()['source_window']['number_validation']==NUMBER_VALIDATION_VERSION
